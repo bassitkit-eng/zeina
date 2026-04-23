@@ -19,6 +19,7 @@ export interface Product {
   productType: string
   imagePath: string
   imagePaths?: string[]
+  imageStoragePaths?: string[]
   status?: ProductStatus
   description?: string
   contactInfo?: ProductContactInfo

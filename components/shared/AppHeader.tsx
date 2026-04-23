@@ -2,16 +2,41 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useFavorites } from '@/app/contexts/FavoritesContext'
 import { CATEGORIES } from '@/lib/catalog'
+import { supabaseClient } from '@/lib/supabase/client'
 
 export function AppHeader() {
+  const router = useRouter()
   const { favorites } = useFavorites()
   const [isClient, setIsClient] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
+
+    supabaseClient.auth.getSession().then(({ data }) => {
+      setIsAuthenticated(Boolean(data.session))
+    })
+
+    const {
+      data: { subscription },
+    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(Boolean(session))
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
+
+  const handleLogout = async () => {
+    await supabaseClient.auth.signOut()
+    setIsAuthenticated(false)
+    router.push('/')
+    router.refresh()
+  }
 
   return (
     <header className="bg-white border-b-2 border-[#E5E5E5] sticky top-0 z-50" dir="rtl">
@@ -38,6 +63,23 @@ export function AppHeader() {
             <span className="text-xl leading-none">+</span>
             <span>أضف منتجك</span>
           </Link>
+
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="h-10 px-4 rounded-xl bg-[#DC2626] text-white font-bold flex items-center justify-center hover:bg-[#B91C1C] transition"
+            >
+              تسجيل الخروج
+            </button>
+          ) : (
+            <Link
+              href="/auth"
+              className="h-10 px-4 rounded-xl border border-[#7B57C8] text-[#7B57C8] font-bold flex items-center justify-center hover:bg-[#7B57C8] hover:text-white transition"
+            >
+              تسجيل الدخول
+            </Link>
+          )}
 
           <Link
             href="/favorites"

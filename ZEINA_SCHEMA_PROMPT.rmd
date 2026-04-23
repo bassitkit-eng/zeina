@@ -1,0 +1,335 @@
+﻿المشروع الحالي تم بناء قاعدة البيانات له على Supabase، والهدف الآن أن تفهم الـ schema بالكامل قبل البدء في تصميم الواجهة أو ربط الـ frontend.
+
+اسم المشروع: Zeina
+فكرة المشروع: منصة لعرض منتجات وتجهيزات الخطوبة والأفراح مثل الكوشات، التورت، الدعوات، المرايا، وبوكيهات الورد.
+
+## الجداول الموجودة حاليًا
+
+### 1) profiles
+
+هذا الجدول يمثل بيانات المستخدم الأساسية المرتبطة بـ Supabase Auth.
+
+الحقول:
+
+* id: uuid، وهو نفس auth.users.id
+* email: text
+* full_name: text
+* phone: text
+* role: enum من القيم:
+
+  * user
+  * vendor
+  * admin
+* status: enum من القيم:
+
+  * active
+  * suspended
+* created_at: timestamptz
+* updated_at: timestamptz
+
+العلاقة:
+
+* كل profile مرتبط بمستخدم واحد في auth.users
+
+---
+
+### 2) vendor_profiles
+
+هذا الجدول يمثل بروفايل البائع، وهو منفصل عن profile العادي.
+
+الحقول:
+
+* id: uuid
+* user_id: uuid، مرتبط بـ profiles.id
+* business_name: text
+* description: text
+* phone: text
+* whatsapp: text
+* facebook: text
+* instagram: text
+* tiktok: text
+* governorate_id: uuid، مرتبط بـ governorates.id
+* city_id: uuid، مرتبط بـ cities.id
+* address_text: text
+* logo_url: text
+* created_at: timestamptz
+* updated_at: timestamptz
+
+العلاقات:
+
+* كل vendor_profile يخص user واحد فقط
+* غالبًا كل user له vendor_profile واحد فقط
+* vendor_profile يمكن ربطه بمحافظة ومدينة
+
+---
+
+### 3) categories
+
+هذا الجدول للتصنيفات الرئيسية.
+
+الحقول:
+
+* id: uuid
+* name: text
+* slug: text
+* is_active: boolean
+* created_at: timestamptz
+
+أمثلة:
+
+* كوشات
+* تورت
+* دعوات
+* مرايا
+* ورد
+
+---
+
+### 4) subcategories
+
+هذا الجدول للتصنيفات الفرعية داخل كل category.
+
+الحقول:
+
+* id: uuid
+* category_id: uuid، مرتبط بـ categories.id
+* name: text
+* slug: text
+* is_active: boolean
+* created_at: timestamptz
+
+العلاقة:
+
+* كل subcategory تتبع category واحدة
+
+---
+
+### 5) governorates
+
+هذا الجدول للمحافظات.
+
+الحقول:
+
+* id: uuid
+* name_ar: text
+* name_en: text
+* created_at: timestamptz
+
+---
+
+### 6) cities
+
+هذا الجدول للمدن.
+
+الحقول:
+
+* id: uuid
+* governorate_id: uuid، مرتبط بـ governorates.id
+* name_ar: text
+* name_en: text
+* created_at: timestamptz
+
+العلاقة:
+
+* كل مدينة تتبع محافظة واحدة
+
+---
+
+### 7) products
+
+هذا هو الجدول الأساسي للمنتجات.
+
+الحقول:
+
+* id: uuid
+* vendor_id: uuid، مرتبط بـ vendor_profiles.id
+* category_id: uuid، مرتبط بـ categories.id
+* subcategory_id: uuid، مرتبط بـ subcategories.id
+* title: text
+* description: text
+* price: numeric
+* cover_image_url: text
+* cover_storage_path: text
+* governorate_id: uuid، مرتبط بـ governorates.id
+* city_id: uuid، مرتبط بـ cities.id
+* address_text: text
+* status: enum من القيم:
+
+  * draft
+  * published
+  * hidden
+  * soldout
+* is_featured: boolean
+* created_at: timestamptz
+* updated_at: timestamptz
+
+العلاقات:
+
+* كل product يخص vendor واحد
+* كل product له category واحدة
+* ويمكن أن يكون له subcategory
+* ويمكن ربطه بمحافظة ومدينة
+* ويمكن أن يكون له عدة صور في جدول product_images
+
+---
+
+### 8) product_images
+
+هذا الجدول لصور المنتج.
+
+الحقول:
+
+* id: uuid
+* product_id: uuid، مرتبط بـ products.id
+* image_url: text
+* storage_path: text
+* sort_order: int
+* is_primary: boolean
+* created_at: timestamptz
+
+العلاقة:
+
+* كل صورة تتبع منتجًا واحدًا
+* المنتج الواحد يمكن أن يكون له أكثر من صورة
+* توجد صورة أساسية primary لعرضها في الكارد أو الليستينج
+
+مهم:
+
+* الصور نفسها ستكون لاحقًا في Cloudflare R2
+* قاعدة البيانات تخزن فقط روابط الصور ومسار التخزين
+
+---
+
+### 9) favorites
+
+هذا الجدول للمفضلة.
+
+الحقول:
+
+* id: uuid
+* user_id: uuid، مرتبط بـ profiles.id
+* product_id: uuid، مرتبط بـ products.id
+* created_at: timestamptz
+
+العلاقة:
+
+* المستخدم يمكنه إضافة منتجات متعددة إلى المفضلة
+* نفس المنتج لا يجب أن يتكرر أكثر من مرة لنفس المستخدم
+
+---
+
+## العلاقات العامة بين الجداول
+
+* profile واحد يرتبط بمستخدم واحد في auth.users
+* المستخدم يمكن أن يكون له vendor_profile واحد
+* vendor_profile واحد يمكن أن يملك عدة products
+* كل product ينتمي إلى category واحدة وsubcategories اختيارية
+* كل product يمكن أن يحتوي على عدة product_images
+* كل product يمكن إضافته إلى favorites بواسطة المستخدمين
+* كل city تتبع governorate
+* كل vendor profile أو product يمكن ربطه بموقع جغرافي
+
+---
+
+## قواعد مهمة في النظام
+
+### صلاحيات المستخدمين
+
+لدينا 3 أدوار:
+
+* user
+* vendor
+* admin
+
+### حالة المستخدم
+
+* active
+* suspended
+
+### حالة المنتج
+
+* draft: المنتج غير منشور بعد
+* published: ظاهر للناس
+* hidden: مخفي
+* soldout: غير متاح
+
+---
+
+## منطق النظام
+
+### الزائر العام
+
+* يرى فقط المنتجات المنشورة published
+* يرى categories وsubcategories والمواقع
+* يمكنه تصفح المنتجات والبحث والفلترة
+
+### المستخدم العادي
+
+* يمكنه إنشاء حساب
+* يمكنه حفظ المنتجات في favorites
+
+### البائع
+
+* يمكنه إنشاء vendor profile
+* يمكنه إضافة products
+* يمكنه إدارة منتجاته وصورها
+* يمكنه تعديل بيانات النشاط الخاص به
+
+### الأدمن
+
+* يمكنه إدارة الجميع
+* يمكنه إدارة categories وsubcategories والمحافظات والمدن
+* يمكنه رؤية وتعديل كل شيء
+
+---
+
+## المطلوب منك في التصميم
+
+نريد تصميم واجهات مبنية على هذا الـ schema، لذلك فكر في الشاشات التالية:
+
+1. صفحة تسجيل الدخول / التسجيل
+2. صفحة إكمال profile
+3. صفحة إنشاء أو تعديل vendor profile
+4. صفحة عرض جميع المنتجات
+5. صفحة تفاصيل المنتج
+6. صفحة إضافة منتج
+7. صفحة تعديل منتج
+8. واجهة رفع وإدارة صور المنتج
+9. صفحة المفضلة
+10. فلاتر حسب:
+
+* category
+* subcategory
+* governorate
+* city
+
+11. Dashboard بسيطة للبائع لإدارة منتجاته
+
+---
+
+## ملاحظات مهمة جدًا للتصميم
+
+* المنتج له صورة رئيسية وصور إضافية
+* بيانات البائع منفصلة عن بيانات الحساب
+* الموقع الجغرافي موجود على مستوى البائع وعلى مستوى المنتج
+* بعض الحقول اختيارية وبعضها أساسي
+* الواجهة يجب أن تكون سهلة للبائع لأنه سيضيف منتجًا أكثر من مرة
+* يجب التفكير في UX واضح لإضافة المنتج على خطوات:
+
+  1. معلومات أساسية
+  2. تصنيف وموقع
+  3. صور
+  4. مراجعة ونشر
+
+---
+
+## ملاحظة تقنية
+
+الصور ستستخدم لاحقًا Cloudflare R2 بدل Supabase Storage، لذلك التصميم يجب أن يفترض وجود:
+
+* صورة cover
+* صور متعددة
+* upload state
+* preview state
+
+ابدأ الآن بفهم هذا الـ schema وتحويله إلى UI structure واضح، ثم اقترح صفحات ومكونات مناسبة لكل جزء.   قوم بوضه هذا في ملف rmd حتي يسهل قراتة

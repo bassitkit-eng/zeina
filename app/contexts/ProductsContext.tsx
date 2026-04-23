@@ -13,6 +13,7 @@ type ProductFormInput = {
   category: CategoryId
   productType: string
   imagePaths: string[]
+  imageStoragePaths?: string[]
   status: ProductStatus
   description?: string
   contactInfo?: ProductContactInfo
@@ -66,6 +67,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       id: newId,
       imagePath: primaryImage,
       imagePaths: input.imagePaths,
+      imageStoragePaths: input.imageStoragePaths || [],
       ...input,
     }
     setCustomProducts((prev) => [product, ...prev])
@@ -82,6 +84,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
               ...input,
               imagePath: primaryImage,
               imagePaths: input.imagePaths,
+              imageStoragePaths: input.imageStoragePaths || [],
             }
           : product
       )

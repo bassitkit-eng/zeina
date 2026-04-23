@@ -5,6 +5,8 @@ import { AppHeader } from '@/components/shared/AppHeader'
 import { useProducts } from '@/app/contexts/ProductsContext'
 import { CATEGORIES, type CategoryId, type Product, type ProductStatus } from '@/lib/catalog'
 import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
+import { supabaseClient } from '@/lib/supabase/client'
+import { buildProductImagesPayload, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
 
 type ProductFormState = {
   name: string
@@ -20,6 +22,7 @@ type ProductFormState = {
   tiktok: string
   description: string
   imagePaths: string[]
+  imageStoragePaths: string[]
   status: ProductStatus
 }
 
@@ -42,6 +45,7 @@ const initialForm: ProductFormState = {
   tiktok: '',
   description: '',
   imagePaths: [],
+  imageStoragePaths: [],
   status: 'draft',
 }
 
@@ -60,9 +64,22 @@ export default function AddProductPage() {
   const [editingProductId, setEditingProductId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<ProductFormState>(initialForm)
   const [editError, setEditError] = useState('')
+  const [currentUserId, setCurrentUserId] = useState('')
+  const [draftUploadProductId, setDraftUploadProductId] = useState(() => crypto.randomUUID())
+  const [isUploading, setIsUploading] = useState(false)
 
   const areaOptions = useMemo(() => getAreasByGovernorate(form.city), [form.city])
   const editAreaOptions = useMemo(() => getAreasByGovernorate(editForm.city), [editForm.city])
+
+  useEffect(() => {
+    let isMounted = true
+    supabaseClient.auth.getUser().then(({ data }) => {
+      if (isMounted && data.user?.id) setCurrentUserId(data.user.id)
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const validateStep = (stepIndex: number) => {
     if (stepIndex === 0) {
@@ -108,6 +125,11 @@ export default function AddProductPage() {
   const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
+    if (!currentUserId) {
+      setError('برجاء تسجيل الدخول أولًا قبل رفع الصور.')
+      e.target.value = ''
+      return
+    }
 
     const availableSlots = 4 - form.imagePaths.length
     if (availableSlots <= 0) {
@@ -115,21 +137,25 @@ export default function AddProductPage() {
       return
     }
 
-    const selected = files.slice(0, availableSlots)
-    const base64Images = await Promise.all(
-      selected.map(
-        (file) =>
-          new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
-            reader.readAsDataURL(file)
-          })
+    try {
+      setIsUploading(true)
+      const selected = files.slice(0, availableSlots)
+      const uploaded = await Promise.all(
+        selected.map((file) => uploadProductImage({ file, userId: currentUserId, productId: draftUploadProductId }))
       )
-    )
 
-    setForm((prev) => ({ ...prev, imagePaths: [...prev.imagePaths, ...base64Images].slice(0, 4) }))
-    setError('')
-    e.target.value = ''
+      setForm((prev) => ({
+        ...prev,
+        imagePaths: [...prev.imagePaths, ...uploaded.map((item) => item.imageUrl)].slice(0, 4),
+        imageStoragePaths: [...prev.imageStoragePaths, ...uploaded.map((item) => item.storagePath)].slice(0, 4),
+      }))
+      setError('')
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'تعذر رفع الصور الآن.')
+    } finally {
+      setIsUploading(false)
+      e.target.value = ''
+    }
   }
 
   const startEditing = (product: Product) => {
@@ -148,6 +174,7 @@ export default function AddProductPage() {
       tiktok: product.contactInfo?.tiktok || '',
       description: product.description || '',
       imagePaths: product.imagePaths?.length ? product.imagePaths : [product.imagePath],
+      imageStoragePaths: product.imageStoragePaths || [],
       status: product.status || 'draft',
     })
     setEditError('')
@@ -155,6 +182,7 @@ export default function AddProductPage() {
 
   const resetForm = () => {
     setForm(initialForm)
+    setDraftUploadProductId(crypto.randomUUID())
     setError('')
     setStep(0)
   }
@@ -178,8 +206,15 @@ export default function AddProductPage() {
       },
       description: form.description.trim(),
       imagePaths: form.imagePaths,
+      imageStoragePaths: form.imageStoragePaths,
       status,
     }
+
+    // جاهز لاحقًا لحفظه مباشرة في جدول product_images داخل Supabase.
+    const uploadedImagesForInsert: UploadedImageMeta[] = form.imageStoragePaths
+      .map((storagePath, index) => ({ storagePath, imageUrl: form.imagePaths[index] || '' }))
+      .filter((item) => Boolean(item.imageUrl))
+    void buildProductImagesPayload(draftUploadProductId, uploadedImagesForInsert)
 
     addProduct(payload)
     resetForm()
@@ -189,6 +224,11 @@ export default function AddProductPage() {
   const onEditFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
+    if (!currentUserId || !editingProductId) {
+      setEditError('برجاء تسجيل الدخول أولًا قبل رفع الصور.')
+      e.target.value = ''
+      return
+    }
 
     const availableSlots = 4 - editForm.imagePaths.length
     if (availableSlots <= 0) {
@@ -196,21 +236,25 @@ export default function AddProductPage() {
       return
     }
 
-    const selected = files.slice(0, availableSlots)
-    const base64Images = await Promise.all(
-      selected.map(
-        (file) =>
-          new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
-            reader.readAsDataURL(file)
-          })
+    try {
+      setIsUploading(true)
+      const selected = files.slice(0, availableSlots)
+      const uploaded = await Promise.all(
+        selected.map((file) => uploadProductImage({ file, userId: currentUserId, productId: String(editingProductId) }))
       )
-    )
 
-    setEditForm((prev) => ({ ...prev, imagePaths: [...prev.imagePaths, ...base64Images].slice(0, 4) }))
-    setEditError('')
-    e.target.value = ''
+      setEditForm((prev) => ({
+        ...prev,
+        imagePaths: [...prev.imagePaths, ...uploaded.map((item) => item.imageUrl)].slice(0, 4),
+        imageStoragePaths: [...prev.imageStoragePaths, ...uploaded.map((item) => item.storagePath)].slice(0, 4),
+      }))
+      setEditError('')
+    } catch (uploadError) {
+      setEditError(uploadError instanceof Error ? uploadError.message : 'تعذر رفع الصور الآن.')
+    } finally {
+      setIsUploading(false)
+      e.target.value = ''
+    }
   }
 
   const closeEditModal = () => {
@@ -255,6 +299,7 @@ export default function AddProductPage() {
       },
       description: editForm.description.trim(),
       imagePaths: editForm.imagePaths,
+      imageStoragePaths: editForm.imageStoragePaths,
       status: editForm.status,
     })
 
@@ -272,9 +317,17 @@ export default function AddProductPage() {
 
     if (confirmAction.type === 'delete-image') {
       if (confirmAction.target === 'create') {
-        setForm((prev) => ({ ...prev, imagePaths: prev.imagePaths.filter((_, i) => i !== confirmAction.imageIndex) }))
+        setForm((prev) => ({
+          ...prev,
+          imagePaths: prev.imagePaths.filter((_, i) => i !== confirmAction.imageIndex),
+          imageStoragePaths: prev.imageStoragePaths.filter((_, i) => i !== confirmAction.imageIndex),
+        }))
       } else {
-        setEditForm((prev) => ({ ...prev, imagePaths: prev.imagePaths.filter((_, i) => i !== confirmAction.imageIndex) }))
+        setEditForm((prev) => ({
+          ...prev,
+          imagePaths: prev.imagePaths.filter((_, i) => i !== confirmAction.imageIndex),
+          imageStoragePaths: prev.imageStoragePaths.filter((_, i) => i !== confirmAction.imageIndex),
+        }))
       }
     }
 
@@ -476,8 +529,13 @@ export default function AddProductPage() {
                   <div>
                     <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">صور المنتج (حد أقصى 4 صور)</label>
                     <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={onFileChange} className="hidden" />
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="h-11 px-4 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 transition">
-                      اختيار الصور
+                    <button
+                      type="button"
+                      disabled={isUploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-11 px-4 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 transition disabled:opacity-60"
+                    >
+                      {isUploading ? 'جارٍ رفع الصور...' : 'اختيار الصور'}
                     </button>
                     <p className="text-xs text-[#6B7280] mt-2">الصورة الأولى ستكون الصورة الرئيسية.</p>
                   </div>
@@ -705,8 +763,13 @@ export default function AddProductPage() {
             <div className="mt-5">
               <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">صور المنتج (حد أقصى 4 صور)</label>
               <input ref={editFileInputRef} type="file" accept="image/*" multiple onChange={onEditFileChange} className="hidden" />
-              <button type="button" onClick={() => editFileInputRef.current?.click()} className="h-10 px-4 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 transition">
-                إضافة صور
+              <button
+                type="button"
+                disabled={isUploading}
+                onClick={() => editFileInputRef.current?.click()}
+                className="h-10 px-4 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 transition disabled:opacity-60"
+              >
+                {isUploading ? 'جارٍ رفع الصور...' : 'إضافة صور'}
               </button>
 
               {editForm.imagePaths.length > 0 && (
