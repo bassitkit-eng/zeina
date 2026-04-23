@@ -12,7 +12,7 @@ type ProductFormInput = {
   city: string
   category: CategoryId
   productType: string
-  imagePath: string
+  imagePaths: string[]
   description?: string
 }
 
@@ -58,8 +58,11 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const addProduct = (input: ProductFormInput) => {
     const newId = Date.now()
+    const primaryImage = input.imagePaths[0] || ''
     const product: Product = {
       id: newId,
+      imagePath: primaryImage,
+      imagePaths: input.imagePaths,
       ...input,
     }
     setCustomProducts((prev) => [product, ...prev])
@@ -67,7 +70,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateProduct = (id: number, input: ProductFormInput) => {
-    setCustomProducts((prev) => prev.map((product) => (product.id === id ? { ...product, ...input } : product)))
+    const primaryImage = input.imagePaths[0] || ''
+    setCustomProducts((prev) =>
+      prev.map((product) => (product.id === id ? { ...product, ...input, imagePath: primaryImage, imagePaths: input.imagePaths } : product))
+    )
   }
 
   const deleteProduct = (id: number) => {
@@ -108,4 +114,3 @@ export function useProducts() {
   }
   return context
 }
-

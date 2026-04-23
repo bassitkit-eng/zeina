@@ -9,6 +9,7 @@ export interface Product {
   category: CategoryId
   productType: string
   imagePath: string
+  imagePaths?: string[]
   description?: string
 }
 

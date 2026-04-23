@@ -401,3 +401,21 @@ Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
  GET /category/cakes 200 in 68ms (next.js: 27ms, application-code: 41ms)
  GET /category/cakes 200 in 68ms (next.js: 46ms, application-code: 22ms)
 ✓ Compiled in 33ms
+ GET /add-product 200 in 318ms (next.js: 302ms, application-code: 16ms)
+ GET /category/kosha 200 in 68ms (next.js: 44ms, application-code: 25ms)
+ GET /add-product 200 in 19ms (next.js: 2ms, application-code: 17ms)
+ GET /add-product 200 in 95ms (next.js: 3ms, application-code: 92ms)
+ GET / 200 in 53ms (next.js: 37ms, application-code: 16ms)
+ GET /category/kosha 200 in 32ms (next.js: 13ms, application-code: 18ms)
+ GET /add-product 200 in 19ms (next.js: 3ms, application-code: 16ms)
+⚠ Fast Refresh had to perform a full reload when ./app/contexts/ProductsContext.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 32ms
+ GET /add-product 200 in 38ms (next.js: 2ms, application-code: 35ms)
+✓ Compiled in 58ms
+ GET /category/kosha 200 in 72ms (next.js: 43ms, application-code: 28ms)
+ GET /product/1776945167972 200 in 64ms (next.js: 42ms, application-code: 22ms)
+ GET / 200 in 53ms (next.js: 37ms, application-code: 15ms)
+ GET /category/kosha 200 in 36ms (next.js: 15ms, application-code: 21ms)
+ GET /add-product 200 in 59ms (next.js: 38ms, application-code: 21ms)
+✓ Compiled in 37ms
+✓ Compiled in 41ms

@@ -1,6 +1,6 @@
-'use client'
+﻿'use client'
 
-import { ChangeEvent, useMemo, useState } from 'react'
+import { ChangeEvent, useMemo, useRef, useState } from 'react'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useProducts } from '@/app/contexts/ProductsContext'
 import { CATEGORIES, type CategoryId, type Product } from '@/lib/catalog'
@@ -13,8 +13,13 @@ type ProductFormState = {
   location: string
   price: string
   description: string
-  imagePath: string
+  imagePaths: string[]
 }
+
+type ConfirmAction =
+  | { type: 'delete-image'; imageIndex: number }
+  | { type: 'delete-product'; productId: number }
+  | null
 
 const initialForm: ProductFormState = {
   name: '',
@@ -24,7 +29,7 @@ const initialForm: ProductFormState = {
   location: '',
   price: '',
   description: '',
-  imagePath: '',
+  imagePaths: [],
 }
 
 export default function AddProductPage() {
@@ -32,18 +37,45 @@ export default function AddProductPage() {
   const [form, setForm] = useState<ProductFormState>(initialForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const actionLabel = useMemo(() => (editingId ? 'حفظ التعديلات' : 'إضافة المنتج'), [editingId])
 
-  const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : ''
-      setForm((prev) => ({ ...prev, imagePath: result }))
+  const confirmMessage = useMemo(() => {
+    if (!confirmAction) return ''
+    if (confirmAction.type === 'delete-image') {
+      return 'هل أنت متأكد من حذف هذه الصورة؟ لا يمكن التراجع بعد الحذف.'
     }
-    reader.readAsDataURL(file)
+    return 'هل أنت متأكد من حذف المنتج؟ سيتم حذف جميع بياناته.'
+  }, [confirmAction])
+
+  const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    const currentCount = form.imagePaths.length
+    const availableSlots = 4 - currentCount
+    if (availableSlots <= 0) {
+      setError('الحد الأقصى للصور هو 4 صور.')
+      return
+    }
+
+    const selected = files.slice(0, availableSlots)
+    const base64Images = await Promise.all(
+      selected.map(
+        (file) =>
+          new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+            reader.readAsDataURL(file)
+          })
+      )
+    )
+
+    setForm((prev) => ({ ...prev, imagePaths: [...prev.imagePaths, ...base64Images].slice(0, 4) }))
+    setError('')
+    e.target.value = ''
   }
 
   const startEditing = (product: Product) => {
@@ -56,7 +88,7 @@ export default function AddProductPage() {
       location: product.location,
       price: String(product.price),
       description: product.description || '',
-      imagePath: product.imagePath,
+      imagePaths: product.imagePaths?.length ? product.imagePaths : [product.imagePath],
     })
     setError('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -69,8 +101,8 @@ export default function AddProductPage() {
   }
 
   const onSubmit = () => {
-    if (!form.name || !form.city || !form.location || !form.price || !form.imagePath) {
-      setError('من فضلك أكمل كل الحقول المطلوبة وارفع صورة.')
+    if (!form.name || !form.city || !form.location || !form.price || form.imagePaths.length === 0) {
+      setError('من فضلك أكمل كل الحقول المطلوبة وارفع صورة واحدة على الأقل.')
       return
     }
 
@@ -88,7 +120,7 @@ export default function AddProductPage() {
       location: form.location,
       price: parsedPrice,
       description: form.description,
-      imagePath: form.imagePath,
+      imagePaths: form.imagePaths,
     }
 
     if (editingId) {
@@ -98,6 +130,26 @@ export default function AddProductPage() {
     }
 
     resetForm()
+  }
+
+  const runConfirmAction = () => {
+    if (!confirmAction) return
+
+    if (confirmAction.type === 'delete-image') {
+      setForm((prev) => ({
+        ...prev,
+        imagePaths: prev.imagePaths.filter((_, i) => i !== confirmAction.imageIndex),
+      }))
+    }
+
+    if (confirmAction.type === 'delete-product') {
+      deleteProduct(confirmAction.productId)
+      if (editingId === confirmAction.productId) {
+        resetForm()
+      }
+    }
+
+    setConfirmAction(null)
   }
 
   return (
@@ -176,13 +228,33 @@ export default function AddProductPage() {
               />
 
               <div>
-                <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">صورة المنتج</label>
-                <input type="file" accept="image/*" onChange={onFileChange} className="w-full text-sm" />
+                <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">صور المنتج (حد أقصى 4 صور)</label>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={onFileChange} className="hidden" />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-11 px-4 rounded-lg bg-[#C8A97E] text-white font-bold hover:opacity-90 transition"
+                >
+                  اختيار الصور
+                </button>
+                <p className="text-xs text-[#6B7280] mt-2">يمكنك اختيار حتى 4 صور. الصورة الأولى ستكون الصورة الرئيسية.</p>
               </div>
 
-              {form.imagePath && (
-                <div className="relative h-56 rounded-lg overflow-hidden border border-[#E5E7EB]">
-                  <img src={form.imagePath} alt="معاينة المنتج" className="h-full w-full object-cover" />
+              {form.imagePaths.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {form.imagePaths.map((image, index) => (
+                    <div key={`${image.slice(0, 20)}-${index}`} className="relative h-32 rounded-lg overflow-hidden border border-[#E5E7EB]">
+                      <img src={image} alt={`معاينة المنتج ${index + 1}`} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAction({ type: 'delete-image', imageIndex: index })}
+                        className="absolute top-2 left-2 h-7 w-7 rounded-full bg-black/70 text-white text-sm"
+                      >
+                        ×
+                      </button>
+                      {index === 0 && <span className="absolute bottom-2 right-2 text-xs bg-[#C8A97E] text-white px-2 py-1 rounded-full">رئيسية</span>}
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -222,7 +294,10 @@ export default function AddProductPage() {
                       <button onClick={() => startEditing(product)} className="h-9 px-3 rounded-lg bg-[#F3EBDD] text-[#7A5E37] text-sm font-semibold">
                         تعديل
                       </button>
-                      <button onClick={() => deleteProduct(product.id)} className="h-9 px-3 rounded-lg bg-[#FEE2E2] text-[#B91C1C] text-sm font-semibold">
+                      <button
+                        onClick={() => setConfirmAction({ type: 'delete-product', productId: product.id })}
+                        className="h-9 px-3 rounded-lg bg-[#FEE2E2] text-[#B91C1C] text-sm font-semibold"
+                      >
                         حذف
                       </button>
                     </div>
@@ -233,7 +308,26 @@ export default function AddProductPage() {
           </div>
         </div>
       </section>
+
+      {confirmAction && (
+        <div className="fixed inset-0 z-[100] bg-black/45 flex items-center justify-center px-4" dir="rtl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-[#1F1F1F] mb-3">تأكيد الإجراء</h3>
+            <p className="text-[#4B5563] mb-6">{confirmMessage}</p>
+            <div className="flex gap-3">
+              <button onClick={runConfirmAction} className="flex-1 h-11 rounded-lg bg-[#DC2626] text-white font-bold hover:opacity-90 transition">
+                تأكيد الحذف
+              </button>
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 h-11 rounded-lg border border-[#9CA3AF] text-[#4B5563] font-bold hover:bg-[#F3F4F6] transition"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
-
