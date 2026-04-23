@@ -12,7 +12,7 @@ export interface Product {
 export const CATEGORY_NAMES: Record<CategoryId, string> = {
   kosha: 'كوشات',
   mirrors: 'المرايا',
-  cakes: 'الكعك',
+  cakes: 'تورتات',
 }
 
 export const CATEGORIES = [

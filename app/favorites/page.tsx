@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useFavorites } from '../contexts/FavoritesContext'
 import { ALL_PRODUCTS, CATEGORIES } from '@/lib/catalog'
 
-function FavoriteButton({ productId }: { productId: number }) {
+function FavoriteIconButton({ productId }: { productId: number }) {
   const { isFavorite, toggleFavorite } = useFavorites()
   const [isClient, setIsClient] = useState(false)
 
@@ -21,16 +21,15 @@ function FavoriteButton({ productId }: { productId: number }) {
     <button
       onClick={(e) => {
         e.preventDefault()
+        e.stopPropagation()
         toggleFavorite(productId)
       }}
-      className="w-full mt-3 py-2 border-2 border-[#C8A97E] rounded-lg font-medium transition flex items-center justify-center gap-2"
-      style={{
-        backgroundColor: favorite ? '#C8A97E' : 'transparent',
-        color: favorite ? 'white' : '#C8A97E',
-      }}
+      aria-label={favorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
+      className="absolute top-3 right-3 z-10 h-10 w-10 rounded-full border border-white/70 bg-white/90 shadow-sm backdrop-blur-sm flex items-center justify-center transition hover:scale-105"
     >
-      <span>{favorite ? '♥' : '♡'}</span>
-      <span>{favorite ? 'مضاف للمفضلة' : 'أضف للمفضلة'}</span>
+      <span className={`text-xl leading-none transition ${favorite ? 'text-[#C8A97E]' : 'text-[#8A8A8A]'}`}>
+        {favorite ? '♥' : '♡'}
+      </span>
     </button>
   )
 }
@@ -64,12 +63,12 @@ export default function FavoritesPage() {
             ))}
             <Link
               href="/favorites"
-              className="px-6 py-2 border-2 border-[#C8A97E] text-[#C8A97E] rounded-lg font-medium hover:bg-[#C8A97E] hover:text-white transition flex items-center gap-2 relative"
+              aria-label="المفضلة"
+              className="h-11 w-11 border-2 border-[#C8A97E] text-[#C8A97E] rounded-full font-medium hover:bg-[#C8A97E] hover:text-white transition flex items-center justify-center relative"
             >
-              <span>♥</span>
-              <span>المفضلة</span>
+              <span className="text-2xl leading-none">♥</span>
               {isClient && favorites.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-[#C8A97E] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="absolute top-0.5 right-0.5 bg-[#C8A97E] text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                   {favorites.length}
                 </span>
               )}
@@ -107,7 +106,8 @@ export default function FavoritesPage() {
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {favoriteProducts.map((product) => (
-                <div key={product.id} className="group">
+                <div key={product.id} className="group relative">
+                  <FavoriteIconButton productId={product.id} />
                   <Link href={`/product/${product.id}`}>
                     <div className="cursor-pointer">
                       <div className="relative h-56 bg-gray-200 rounded-lg overflow-hidden mb-3">
@@ -120,7 +120,6 @@ export default function FavoritesPage() {
                       <p className="text-sm text-[#6B6B6B]">{product.location}</p>
                     </div>
                   </Link>
-                  <FavoriteButton productId={product.id} />
                 </div>
               ))}
             </div>
