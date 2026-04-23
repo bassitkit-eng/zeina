@@ -327,108 +327,147 @@ export default function AddProductPage() {
 
               {step === 0 && (
                 <div className="space-y-4">
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="اسم المنتج"
-                    className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                  />
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="تفاصيل المنتج"
-                    rows={5}
-                    className="w-full rounded-lg border border-[#DCCAB2] bg-white p-3 text-[#1F1F1F]"
-                  />
+                  <div>
+                    <label className="block mb-2 text-sm font-extrabold text-black">اسم المنتج</label>
+                    <input
+                      value={form.name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="مثال: كوشة ملكية فاخرة"
+                      className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-2 text-sm font-extrabold text-black">وصف المنتج</label>
+                    <textarea
+                      value={form.description}
+                      onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="مثال: تصميم أنيق مناسب لحفلات الزفاف والخطوبة."
+                      rows={5}
+                      className="w-full rounded-lg border border-[#DCCAB2] bg-white p-3 text-[#1F1F1F]"
+                    />
+                  </div>
                 </div>
               )}
 
               {step === 1 && (
                 <div className="space-y-4">
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value as CategoryId }))}
-                    className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                  >
-                    {CATEGORIES.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-2 text-sm font-extrabold text-black">التصنيف الرئيسي</label>
                     <select
-                      value={form.city}
-                      onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value, location: '' }))}
+                      value={form.category}
+                      onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value as CategoryId }))}
                       className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                     >
-                      <option value="">اختر المحافظة</option>
-                      {GOVERNORATE_OPTIONS.map((governorate) => (
-                        <option key={governorate} value={governorate}>{governorate}</option>
+                      {CATEGORIES.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
                       ))}
-                    </select>
-
-                    <select
-                      value={form.location}
-                      onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
-                      disabled={!form.city}
-                      className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                    >
-                      <option value="">{form.city ? 'اختر المنطقة / المدينة' : 'اختر المحافظة أولًا'}</option>
-                      {areaOptions.map((area) => (
-                        <option key={area} value={area}>{area}</option>
-                      ))}
-                      {form.location && !areaOptions.includes(form.location) && <option value={form.location}>{form.location}</option>}
                     </select>
                   </div>
 
-                  <input
-                    type="number"
-                    value={form.price}
-                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                    placeholder="السعر"
-                    className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block mb-2 text-sm font-extrabold text-black">المحافظة</label>
+                      <select
+                        value={form.city}
+                        onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value, location: '' }))}
+                        className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                      >
+                        <option value="">اختر المحافظة</option>
+                        {GOVERNORATE_OPTIONS.map((governorate) => (
+                          <option key={governorate} value={governorate}>
+                            {governorate}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block mb-2 text-sm font-extrabold text-black">المنطقة / المدينة</label>
+                      <select
+                        value={form.location}
+                        onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
+                        disabled={!form.city}
+                        className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                      >
+                        <option value="">{form.city ? 'اختر المنطقة / المدينة' : 'اختر المحافظة أولًا'}</option>
+                        {areaOptions.map((area) => (
+                          <option key={area} value={area}>
+                            {area}
+                          </option>
+                        ))}
+                        {form.location && !areaOptions.includes(form.location) && <option value={form.location}>{form.location}</option>}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-extrabold text-black">السعر</label>
+                    <input
+                      type="number"
+                      value={form.price}
+                      onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                      placeholder="مثال: 2500"
+                      className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    />
+                  </div>
                 </div>
               )}
 
               {step === 2 && (
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-3">
-                    <input
-                      value={form.phone}
-                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                      placeholder="رقم الهاتف"
-                      className="h-11 w-full sm:w-[240px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                    />
-                    <input
-                      value={form.whatsapp}
-                      onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))}
-                      placeholder="رقم الواتساب"
-                      className="h-11 w-full sm:w-[240px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                    />
+                    <div>
+                      <label className="block mb-2 text-sm font-extrabold text-black">رقم الهاتف</label>
+                      <input
+                        value={form.phone}
+                        onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        placeholder="مثال: 01012345678"
+                        className="h-11 w-full sm:w-[240px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-2 text-sm font-extrabold text-black">رقم الواتساب</label>
+                      <input
+                        value={form.whatsapp}
+                        onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))}
+                        placeholder="مثال: +201012345678"
+                        className="h-11 w-full sm:w-[240px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
+                    <div>
+                      <label className="block mb-2 text-sm font-extrabold text-black">إنستجرام</label>
+                      <input
+                        value={form.instagram}
+                        onChange={(e) => setForm((prev) => ({ ...prev, instagram: e.target.value }))}
+                        placeholder="مثال: @zeina_store"
+                        className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-2 text-sm font-extrabold text-black">فيسبوك</label>
+                      <input
+                        value={form.facebook}
+                        onChange={(e) => setForm((prev) => ({ ...prev, facebook: e.target.value }))}
+                        placeholder="مثال: facebook.com/zeina.store"
+                        className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-extrabold text-black">تيك توك</label>
                     <input
-                      value={form.instagram}
-                      onChange={(e) => setForm((prev) => ({ ...prev, instagram: e.target.value }))}
-                      placeholder="حساب إنستجرام أو الرابط"
-                      className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                    />
-                    <input
-                      value={form.facebook}
-                      onChange={(e) => setForm((prev) => ({ ...prev, facebook: e.target.value }))}
-                      placeholder="حساب فيسبوك أو الرابط"
+                      value={form.tiktok}
+                      onChange={(e) => setForm((prev) => ({ ...prev, tiktok: e.target.value }))}
+                      placeholder="مثال: @zeina.events"
                       className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                     />
                   </div>
-
-                  <input
-                    value={form.tiktok}
-                    onChange={(e) => setForm((prev) => ({ ...prev, tiktok: e.target.value }))}
-                    placeholder="حساب تيك توك أو الرابط"
-                    className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                  />
                 </div>
               )}
 
