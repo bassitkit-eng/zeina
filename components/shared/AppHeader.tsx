@@ -31,8 +31,12 @@ export function AppHeader() {
             </Link>
           ))}
 
-          <Link href="/add-product" className="text-[#1F1F1F] hover:text-[#C8A97E] transition font-semibold">
-            إضافة منتج
+          <Link
+            href="/add-product"
+            className="h-10 px-4 rounded-xl bg-[#7B57C8] text-white font-bold flex items-center justify-center gap-2 border border-[#6E4DB5] shadow-sm hover:bg-[#6E4DB5] transition"
+          >
+            <span className="text-xl leading-none">+</span>
+            <span>أضف منتجك</span>
           </Link>
 
           <Link

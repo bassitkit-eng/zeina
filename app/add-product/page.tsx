@@ -4,6 +4,7 @@ import { ChangeEvent, useMemo, useRef, useState } from 'react'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useProducts } from '@/app/contexts/ProductsContext'
 import { CATEGORIES, type CategoryId, type Product } from '@/lib/catalog'
+import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
 
 type ProductFormState = {
   name: string
@@ -41,6 +42,7 @@ export default function AddProductPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const actionLabel = useMemo(() => (editingId ? 'حفظ التعديلات' : 'إضافة المنتج'), [editingId])
+  const areaOptions = useMemo(() => getAreasByGovernorate(form.city), [form.city])
 
   const confirmMessage = useMemo(() => {
     if (!confirmAction) return ''
@@ -205,18 +207,33 @@ export default function AddProductPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
+                <select
                   value={form.city}
-                  onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
-                  placeholder="المدينة"
+                  onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value, location: '' }))}
                   className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                />
-                <input
+                >
+                  <option value="">اختر المحافظة</option>
+                  {GOVERNORATE_OPTIONS.map((governorate) => (
+                    <option key={governorate} value={governorate}>
+                      {governorate}
+                    </option>
+                  ))}
+                </select>
+
+                <select
                   value={form.location}
                   onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="المنطقة / المكان"
+                  disabled={!form.city}
                   className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                />
+                >
+                  <option value="">{form.city ? 'اختر المنطقة / المدينة' : 'اختر المحافظة أولًا'}</option>
+                  {areaOptions.map((area) => (
+                    <option key={area} value={area}>
+                      {area}
+                    </option>
+                  ))}
+                  {form.location && !areaOptions.includes(form.location) && <option value={form.location}>{form.location}</option>}
+                </select>
               </div>
 
               <textarea
