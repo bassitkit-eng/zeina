@@ -1,11 +1,12 @@
 ﻿'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { ProductGridCard } from '@/components/shared/ProductGridCard'
 import { CATEGORY_NAMES, type CategoryId } from '@/lib/catalog'
+import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
 
 export default function CategoryPage() {
   const { productsByCategory } = useProducts()
@@ -19,9 +20,23 @@ export default function CategoryPage() {
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
 
-  const locationOptions = useMemo(() => ['all', ...Array.from(new Set(products.map((product) => product.location)))], [products])
-  const cityOptions = useMemo(() => ['all', ...Array.from(new Set(products.map((product) => product.city)))], [products])
+  const cityOptions = useMemo(() => ['all', ...GOVERNORATE_OPTIONS], [])
+  const locationOptions = useMemo(() => {
+    if (selectedCity === 'all') {
+      const allEgyptAreas = Array.from(new Set(GOVERNORATE_OPTIONS.flatMap((governorate) => getAreasByGovernorate(governorate))))
+      const productAreas = Array.from(new Set(products.map((product) => product.location)))
+      return ['all', ...Array.from(new Set([...allEgyptAreas, ...productAreas]))]
+    }
+
+    const areasByGovernorate = getAreasByGovernorate(selectedCity)
+    const productAreasForCity = products.filter((product) => product.city === selectedCity).map((product) => product.location)
+    return ['all', ...Array.from(new Set([...areasByGovernorate, ...productAreasForCity]))]
+  }, [selectedCity, products])
   const typeOptions = useMemo(() => ['all', ...Array.from(new Set(products.map((product) => product.productType)))], [products])
+
+  useEffect(() => {
+    setSelectedLocation('all')
+  }, [selectedCity])
 
   const filteredProducts = useMemo(
     () =>
@@ -60,7 +75,7 @@ export default function CategoryPage() {
               >
                 {locationOptions.map((location) => (
                   <option key={location} value={location}>
-                    {location === 'all' ? 'كل الأماكن' : location}
+                    {location === 'all' ? 'كل المدن/المناطق' : location}
                   </option>
                 ))}
               </select>
@@ -68,7 +83,7 @@ export default function CategoryPage() {
 
             <div>
               <label htmlFor="city-filter" className="block mb-2 text-sm font-semibold text-[#1F1F1F]">
-                فلترة حسب المدينة
+                فلترة حسب المحافظة
               </label>
               <select
                 id="city-filter"
@@ -78,7 +93,7 @@ export default function CategoryPage() {
               >
                 {cityOptions.map((city) => (
                   <option key={city} value={city}>
-                    {city === 'all' ? 'كل المدن' : city}
+                    {city === 'all' ? 'كل المحافظات' : city}
                   </option>
                 ))}
               </select>
@@ -135,7 +150,7 @@ export default function CategoryPage() {
                   setMinPrice('')
                   setMaxPrice('')
                 }}
-                className="h-11 w-full rounded-lg border border-[#C8A97E] text-[#C8A97E] font-medium hover:bg-[#C8A97E] hover:text-white transition"
+                className="h-11 w-full rounded-lg bg-[#C8A97E] text-white font-bold hover:bg-[#B89363] transition shadow-sm"
               >
                 إعادة تعيين الفلاتر
               </button>
@@ -163,4 +178,3 @@ export default function CategoryPage() {
     </main>
   )
 }
-
