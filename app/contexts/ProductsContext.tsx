@@ -1,7 +1,7 @@
-'use client'
+﻿'use client'
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { ALL_PRODUCTS, type CategoryId, type Product } from '@/lib/catalog'
+import { ALL_PRODUCTS, type CategoryId, type Product, type ProductStatus } from '@/lib/catalog'
 
 const CUSTOM_PRODUCTS_KEY = 'zeina_custom_products'
 
@@ -13,6 +13,7 @@ type ProductFormInput = {
   category: CategoryId
   productType: string
   imagePaths: string[]
+  status: ProductStatus
   description?: string
 }
 
@@ -22,6 +23,7 @@ interface ProductsContextType {
   customProducts: Product[]
   addProduct: (input: ProductFormInput) => number
   updateProduct: (id: number, input: ProductFormInput) => void
+  updateProductStatus: (id: number, status: ProductStatus) => void
   deleteProduct: (id: number) => void
 }
 
@@ -72,23 +74,41 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const updateProduct = (id: number, input: ProductFormInput) => {
     const primaryImage = input.imagePaths[0] || ''
     setCustomProducts((prev) =>
-      prev.map((product) => (product.id === id ? { ...product, ...input, imagePath: primaryImage, imagePaths: input.imagePaths } : product))
+      prev.map((product) =>
+        product.id === id
+          ? {
+              ...product,
+              ...input,
+              imagePath: primaryImage,
+              imagePaths: input.imagePaths,
+            }
+          : product
+      )
     )
+  }
+
+  const updateProductStatus = (id: number, status: ProductStatus) => {
+    setCustomProducts((prev) => prev.map((product) => (product.id === id ? { ...product, status } : product)))
   }
 
   const deleteProduct = (id: number) => {
     setCustomProducts((prev) => prev.filter((product) => product.id !== id))
   }
 
-  const allProducts = useMemo(() => [...ALL_PRODUCTS, ...customProducts], [customProducts])
+  const visibleCustomProducts = useMemo(
+    () => customProducts.filter((product) => (product.status || 'published') === 'published'),
+    [customProducts]
+  )
+
+  const allProducts = useMemo(() => [...ALL_PRODUCTS, ...visibleCustomProducts], [visibleCustomProducts])
 
   const productsByCategory = useMemo<Record<CategoryId, Product[]>>(
     () => ({
-      kosha: [...baseProductsByCategory.kosha, ...customProducts.filter((p) => p.category === 'kosha')],
-      mirrors: [...baseProductsByCategory.mirrors, ...customProducts.filter((p) => p.category === 'mirrors')],
-      cakes: [...baseProductsByCategory.cakes, ...customProducts.filter((p) => p.category === 'cakes')],
+      kosha: [...baseProductsByCategory.kosha, ...visibleCustomProducts.filter((p) => p.category === 'kosha')],
+      mirrors: [...baseProductsByCategory.mirrors, ...visibleCustomProducts.filter((p) => p.category === 'mirrors')],
+      cakes: [...baseProductsByCategory.cakes, ...visibleCustomProducts.filter((p) => p.category === 'cakes')],
     }),
-    [customProducts]
+    [visibleCustomProducts]
   )
 
   return (
@@ -99,6 +119,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
         customProducts,
         addProduct,
         updateProduct,
+        updateProductStatus,
         deleteProduct,
       }}
     >

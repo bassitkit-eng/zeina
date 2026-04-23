@@ -1,4 +1,5 @@
 ﻿export type CategoryId = 'kosha' | 'mirrors' | 'cakes'
+export type ProductStatus = 'draft' | 'published' | 'hidden' | 'soldout'
 
 export interface Product {
   id: number
@@ -10,6 +11,7 @@ export interface Product {
   productType: string
   imagePath: string
   imagePaths?: string[]
+  status?: ProductStatus
   description?: string
 }
 
