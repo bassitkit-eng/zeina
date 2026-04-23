@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { ALL_PRODUCTS, type CategoryId, type Product, type ProductStatus } from '@/lib/catalog'
+import { ALL_PRODUCTS, type CategoryId, type Product, type ProductContactInfo, type ProductStatus } from '@/lib/catalog'
 
 const CUSTOM_PRODUCTS_KEY = 'zeina_custom_products'
 
@@ -15,6 +15,7 @@ type ProductFormInput = {
   imagePaths: string[]
   status: ProductStatus
   description?: string
+  contactInfo?: ProductContactInfo
 }
 
 interface ProductsContextType {

@@ -499,3 +499,62 @@ Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
  GET /add-product 200 in 58ms (next.js: 40ms, application-code: 18ms)
 ✓ Compiled in 320ms
  GET /add-product 200 in 88ms (next.js: 55ms, application-code: 33ms)
+ GET /add-product 200 in 95ms (next.js: 4ms, application-code: 91ms)
+ GET / 200 in 41ms (next.js: 26ms, application-code: 14ms)
+ GET / 200 in 16ms (next.js: 1913µs, application-code: 14ms)
+ GET /add-product 200 in 22ms (next.js: 5ms, application-code: 17ms)
+ GET / 200 in 15ms (next.js: 1816µs, application-code: 13ms)
+✓ Compiled in 55ms
+ GET /add-product 200 in 59ms (next.js: 41ms, application-code: 18ms)
+✓ Compiled in 55ms
+✓ Compiled in 50ms
+✓ Compiled in 49ms
+✓ Compiled in 29ms
+✓ Compiled in 69ms
+✓ Compiled in 39ms
+✓ Compiled in 50ms
+✓ Compiled in 29ms
+ GET /add-product 200 in 140ms (next.js: 41ms, application-code: 99ms)
+⚠ Fast Refresh had to perform a full reload when ./lib/catalog.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 28ms
+ GET /add-product 200 in 146ms (next.js: 43ms, application-code: 103ms)
+⚠ Fast Refresh had to perform a full reload when ./app/contexts/ProductsContext.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 33ms
+ GET /add-product 200 in 44ms (next.js: 2ms, application-code: 41ms)
+✓ Compiled in 35ms
+✓ Compiled in 35ms
+✓ Compiled in 30ms
+✓ Compiled in 58ms
+✓ Compiled in 33ms
+ GET /add-product 200 in 146ms (next.js: 47ms, application-code: 98ms)
+ GET /category/cakes 200 in 65ms (next.js: 45ms, application-code: 20ms)
+ GET /category/kosha 200 in 31ms (next.js: 7ms, application-code: 24ms)
+ GET / 200 in 55ms (next.js: 36ms, application-code: 19ms)
+ GET /add-product 200 in 19ms (next.js: 2ms, application-code: 16ms)
+ GET /category/kosha 200 in 25ms (next.js: 7ms, application-code: 18ms)
+ GET /add-product 200 in 21ms (next.js: 6ms, application-code: 15ms)
+ GET / 200 in 21ms (next.js: 3ms, application-code: 18ms)
+ GET / 200 in 394ms (next.js: 55ms, application-code: 338ms)
+[browser] Image with src "/images/cake.jpg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+[browser] Image with src "/images/mirr.jpg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+ GET /category/mirrors 200 in 78ms (next.js: 46ms, application-code: 32ms)
+✓ Compiled in 525ms
+✓ Compiled in 168ms
+✓ Compiled in 24ms
+ GET / 200 in 356ms (next.js: 335ms, application-code: 22ms)
+ GET / 200 in 95ms (next.js: 3ms, application-code: 92ms)
+[browser] Image with src "/images/mirr.jpg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+ GET / 200 in 51ms (next.js: 3ms, application-code: 48ms)
+ GET / 200 in 47ms (next.js: 3ms, application-code: 43ms)
+[browser] Image with src "/images/mirr.jpg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+⚠ Fast Refresh had to perform a full reload when ./lib/catalog.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+✓ Compiled in 295ms
+ GET / 200 in 139ms (next.js: 42ms, application-code: 96ms)
+ GET / 200 in 40ms (next.js: 1779µs, application-code: 38ms)
+[browser] Image with src "/images/mirr.jpg" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
+ GET /add-product 200 in 239ms (next.js: 196ms, application-code: 43ms)

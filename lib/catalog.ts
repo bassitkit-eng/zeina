@@ -1,6 +1,14 @@
 ﻿export type CategoryId = 'kosha' | 'mirrors' | 'cakes'
 export type ProductStatus = 'draft' | 'published' | 'hidden' | 'soldout'
 
+export interface ProductContactInfo {
+  phone?: string
+  whatsapp?: string
+  instagram?: string
+  facebook?: string
+  tiktok?: string
+}
+
 export interface Product {
   id: number
   name: string
@@ -13,6 +21,7 @@ export interface Product {
   imagePaths?: string[]
   status?: ProductStatus
   description?: string
+  contactInfo?: ProductContactInfo
 }
 
 export const CATEGORY_NAMES: Record<CategoryId, string> = {

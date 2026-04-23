@@ -13,6 +13,11 @@ type ProductFormState = {
   city: string
   location: string
   price: string
+  phone: string
+  whatsapp: string
+  instagram: string
+  facebook: string
+  tiktok: string
   description: string
   imagePaths: string[]
   status: ProductStatus
@@ -30,12 +35,17 @@ const initialForm: ProductFormState = {
   city: '',
   location: '',
   price: '',
+  phone: '',
+  whatsapp: '',
+  instagram: '',
+  facebook: '',
+  tiktok: '',
   description: '',
   imagePaths: [],
   status: 'draft',
 }
 
-const STEPS = ['بيانات أساسية', 'التصنيف والموقع', 'الصور', 'المراجعة والنشر']
+const STEPS = ['بيانات أساسية', 'التصنيف والموقع', 'معلومات التواصل', 'الصور', 'المراجعة والنشر']
 
 export default function AddProductPage() {
   const { customProducts, addProduct, updateProduct, deleteProduct } = useProducts()
@@ -74,7 +84,7 @@ export default function AddProductPage() {
       }
     }
 
-    if (stepIndex === 2) {
+    if (stepIndex === 3) {
       if (form.imagePaths.length === 0) {
         setError('أضف صورة واحدة على الأقل.')
         return false
@@ -131,6 +141,11 @@ export default function AddProductPage() {
       city: product.city,
       location: product.location,
       price: String(product.price),
+      phone: product.contactInfo?.phone || '',
+      whatsapp: product.contactInfo?.whatsapp || '',
+      instagram: product.contactInfo?.instagram || '',
+      facebook: product.contactInfo?.facebook || '',
+      tiktok: product.contactInfo?.tiktok || '',
       description: product.description || '',
       imagePaths: product.imagePaths?.length ? product.imagePaths : [product.imagePath],
       status: product.status || 'draft',
@@ -145,7 +160,7 @@ export default function AddProductPage() {
   }
 
   const submitWithStatus = (status: ProductStatus) => {
-    if (!validateStep(0) || !validateStep(1) || !validateStep(2)) return
+    if (!validateStep(0) || !validateStep(1) || !validateStep(3)) return
 
     const payload = {
       name: form.name.trim(),
@@ -154,6 +169,13 @@ export default function AddProductPage() {
       city: form.city,
       location: form.location,
       price: Number(form.price),
+      contactInfo: {
+        phone: form.phone.trim(),
+        whatsapp: form.whatsapp.trim(),
+        instagram: form.instagram.trim(),
+        facebook: form.facebook.trim(),
+        tiktok: form.tiktok.trim(),
+      },
       description: form.description.trim(),
       imagePaths: form.imagePaths,
       status,
@@ -224,6 +246,13 @@ export default function AddProductPage() {
       city: editForm.city,
       location: editForm.location,
       price: parsedPrice,
+      contactInfo: {
+        phone: editForm.phone.trim(),
+        whatsapp: editForm.whatsapp.trim(),
+        instagram: editForm.instagram.trim(),
+        facebook: editForm.facebook.trim(),
+        tiktok: editForm.tiktok.trim(),
+      },
       description: editForm.description.trim(),
       imagePaths: editForm.imagePaths,
       status: editForm.status,
@@ -364,6 +393,47 @@ export default function AddProductPage() {
 
               {step === 2 && (
                 <div className="space-y-4">
+                  <div className="flex flex-wrap gap-3">
+                    <input
+                      value={form.phone}
+                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="رقم الهاتف"
+                      className="h-11 w-full sm:w-[240px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    />
+                    <input
+                      value={form.whatsapp}
+                      onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))}
+                      placeholder="رقم الواتساب"
+                      className="h-11 w-full sm:w-[240px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <input
+                      value={form.instagram}
+                      onChange={(e) => setForm((prev) => ({ ...prev, instagram: e.target.value }))}
+                      placeholder="حساب إنستجرام أو الرابط"
+                      className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    />
+                    <input
+                      value={form.facebook}
+                      onChange={(e) => setForm((prev) => ({ ...prev, facebook: e.target.value }))}
+                      placeholder="حساب فيسبوك أو الرابط"
+                      className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    />
+                  </div>
+
+                  <input
+                    value={form.tiktok}
+                    onChange={(e) => setForm((prev) => ({ ...prev, tiktok: e.target.value }))}
+                    placeholder="حساب تيك توك أو الرابط"
+                    className="h-11 w-full sm:w-[320px] rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                  />
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-4">
                   <div>
                     <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">صور المنتج (حد أقصى 4 صور)</label>
                     <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={onFileChange} className="hidden" />
@@ -387,7 +457,7 @@ export default function AddProductPage() {
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 4 && (
                 <div className="space-y-4 text-[#374151]">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <p><span className="font-semibold">الاسم:</span> {form.name || '-'}</p>
@@ -396,6 +466,11 @@ export default function AddProductPage() {
                     <p><span className="font-semibold">السعر:</span> {form.price ? `EGP ${form.price}` : '-'}</p>
                     <p><span className="font-semibold">المحافظة:</span> {form.city || '-'}</p>
                     <p><span className="font-semibold">المنطقة:</span> {form.location || '-'}</p>
+                    <p><span className="font-semibold">الهاتف:</span> {form.phone || '-'}</p>
+                    <p><span className="font-semibold">الواتساب:</span> {form.whatsapp || '-'}</p>
+                    <p><span className="font-semibold">إنستجرام:</span> {form.instagram || '-'}</p>
+                    <p><span className="font-semibold">فيسبوك:</span> {form.facebook || '-'}</p>
+                    <p><span className="font-semibold">تيك توك:</span> {form.tiktok || '-'}</p>
                   </div>
                   <p className="text-sm"><span className="font-semibold">الوصف:</span> {form.description || '-'}</p>
                   <p className="text-sm"><span className="font-semibold">عدد الصور:</span> {form.imagePaths.length}</p>

@@ -95,7 +95,7 @@ export default function Home() {
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-bold text-[#1F1F1F]">{categoryName}</h3>
                 <Link href={`/category/${typedCategoryId}`} className="text-[#C8A97E] hover:underline font-medium">
-                  عرض الكل ←
+                  عرض الكل
                 </Link>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
