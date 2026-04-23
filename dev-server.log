@@ -562,3 +562,9 @@ Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
  GET /category/mirrors 200 in 29ms (next.js: 8ms, application-code: 21ms)
  GET /add-product 200 in 20ms (next.js: 5ms, application-code: 15ms)
 ✓ Compiled in 51ms
+ GET / 200 in 22ms (next.js: 8ms, application-code: 15ms)
+ GET /product/1 200 in 504ms (next.js: 465ms, application-code: 39ms)
+✓ Compiled in 54ms
+✓ Compiled in 26ms
+✓ Compiled in 48ms
+✓ Compiled in 47ms

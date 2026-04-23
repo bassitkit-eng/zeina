@@ -90,18 +90,20 @@ export default function Home() {
         const categoryName = CATEGORIES.find((c) => c.id === typedCategoryId)?.name ?? ''
 
         return (
-          <section key={typedCategoryId} className="px-4 py-12" dir="rtl">
+          <section key={typedCategoryId} className="px-4 py-6" dir="rtl">
             <div className="max-w-6xl mx-auto">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-bold text-[#1F1F1F]">{categoryName}</h3>
-                <Link href={`/category/${typedCategoryId}`} className="text-[#C8A97E] hover:underline font-medium">
-                  عرض الكل
-                </Link>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <ProductGridCard key={product.id} product={product} />
-                ))}
+              <div className="rounded-2xl border border-[#E8E1D7] bg-white p-5 md:p-7 shadow-sm">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-2xl font-bold text-[#1F1F1F]">{categoryName}</h3>
+                  <Link href={`/category/${typedCategoryId}`} className="text-[#7B57C8] hover:text-[#6E4DB5] hover:underline font-bold text-lg md:text-xl">
+                    عرض الكل
+                  </Link>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {products.slice(0, 4).map((product) => (
+                    <ProductGridCard key={product.id} product={product} />
+                  ))}
+                </div>
               </div>
             </div>
           </section>
