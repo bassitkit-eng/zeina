@@ -1,5 +1,6 @@
 ﻿'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
@@ -41,8 +42,8 @@ export default function ProductPage() {
       <section className="px-4 py-8" dir="rtl">
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <div className="w-full h-96 bg-gradient-to-br from-[#C8A97E]/20 to-[#C8A97E]/5 rounded-lg flex items-center justify-center">
-              <span className="text-[#C8A97E] text-6xl">✦</span>
+            <div className="relative w-full h-96 rounded-lg overflow-hidden">
+              <Image src={product.imagePath} alt={product.name} fill className="object-cover" sizes="(max-width: 768px) 100vw, 50vw" />
             </div>
           </div>
 
@@ -51,7 +52,7 @@ export default function ProductPage() {
 
             <div className="mb-6">
               <p className="text-3xl font-bold text-[#C8A97E]">درهم {product.price}</p>
-              <p className="text-[#6B6B6B] mt-2">{product.location}</p>
+              <p className="text-[#6B6B6B] mt-2">{product.city} - {product.location}</p>
             </div>
 
             <div className="mb-6">

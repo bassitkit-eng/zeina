@@ -315,3 +315,28 @@ Read more: https://nextjs.org/docs/app/api-reference/components/image#loading
  GET /category/kosha 200 in 104ms (next.js: 42ms, application-code: 62ms)
  GET /category/kosha 200 in 30ms (next.js: 3ms, application-code: 27ms)
 ✓ Compiled in 21ms
+ GET /category/mirrors 200 in 26ms (next.js: 7ms, application-code: 19ms)
+ GET /category/cakes 200 in 24ms (next.js: 6ms, application-code: 17ms)
+ GET /category/kosha 200 in 27ms (next.js: 9ms, application-code: 18ms)
+ GET /category/mirrors 200 in 30ms (next.js: 9ms, application-code: 20ms)
+ GET /category/cakes 200 in 34ms (next.js: 15ms, application-code: 19ms)
+✓ Compiled in 26ms
+ GET /favorites 200 in 594ms (next.js: 576ms, application-code: 18ms)
+ GET / 200 in 50ms (next.js: 34ms, application-code: 16ms)
+ GET /category/kosha 200 in 62ms (next.js: 39ms, application-code: 22ms)
+✓ Compiled in 31ms
+✓ Compiled in 36ms
+ GET /category/mirrors 200 in 79ms (next.js: 53ms, application-code: 26ms)
+✓ Compiled in 29ms
+✓ Compiled in 40ms
+✓ Compiled in 33ms
+ GET /category/mirrors 200 in 400ms (next.js: 325ms, application-code: 74ms)
+ GET /category/mirrors 200 in 85ms (next.js: 3ms, application-code: 82ms)
+ GET /category/mirrors 200 in 39ms (next.js: 3ms, application-code: 36ms)
+ GET /category/mirrors 200 in 39ms (next.js: 20ms, application-code: 19ms)
+✓ Compiled in 76ms
+ GET /category/mirrors 200 in 149ms (next.js: 35ms, application-code: 114ms)
+ GET /category/mirrors 200 in 93ms (next.js: 29ms, application-code: 64ms)
+ GET /category/mirrors 200 in 36ms (next.js: 4ms, application-code: 33ms)
+✓ Compiled in 23ms
+ GET / 200 in 82ms (next.js: 52ms, application-code: 31ms)
