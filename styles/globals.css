@@ -108,3 +108,11 @@
     @apply border-border;
   }
 }
+
+@layer components {
+  .zeina-halo-section {
+    background: radial-gradient(120% 180% at 50% -10%, rgba(200, 169, 126, 0.24) 0%, rgba(244, 238, 242, 1) 45%, rgba(250, 249, 247, 1) 100%);
+    border-top: 1px solid #e8dde4;
+    border-bottom: 1px solid #e8dde4;
+  }
+}
