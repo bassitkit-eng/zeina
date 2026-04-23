@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Zeina Color Palette */
+  --background: #FAF9F7;
+  --foreground: #1F1F1F;
+  --card: #FFFFFF;
+  --card-foreground: #1F1F1F;
+  --primary-brand: #C8A97E;
+  --text-secondary: #6B6B6B;
+  --border-color: #E5E5E5;
+  
+  /* Semantic tokens (for component compatibility) */
+  --background-color: #FAF9F7;
+  --foreground-color: #1F1F1F;
+  --accent: #C8A97E;
+  --accent-foreground: #FFFFFF;
+  --border: #E5E5E5;
+  --input: #FFFFFF;
+  --muted: #6B6B6B;
+  --muted-foreground: #FFFFFF;
+  --ring: #C8A97E;
+  
+  /* Radius */
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius: var(--radius);
+}
+
+@layer base {
+  /* Typography */
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Headings */
+  h1 {
+    @apply text-4xl font-bold tracking-tight;
+    font-size: 2.5rem;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  h2 {
+    @apply text-3xl font-semibold tracking-tight;
+    font-size: 2rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    @apply text-2xl font-semibold;
+    font-size: 1.5rem;
+    line-height: 1.4;
+  }
+
+  h4 {
+    @apply text-xl font-semibold;
+    font-size: 1.25rem;
+    line-height: 1.4;
+  }
+
+  /* Body */
+  p {
+    @apply text-base leading-relaxed;
+    font-size: 1rem;
+  }
+
+  /* Small text */
+  small, .text-sm {
+    @apply text-sm;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* Links */
+  a {
+    @apply text-accent hover:underline transition-colors;
+  }
+
+  * {
+    @apply border-border;
+  }
+}

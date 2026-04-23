@@ -1,0 +1,33 @@
+
+> my-project@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.100.5:3000
+✓ Ready in 452ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+⚠ Slow filesystem detected. The benchmark took 220ms. If F:\project_business\zeina_new\.next/dev is a network drive, consider moving it to a local folder.
+See more: https://nextjs.org/docs/app/guides/local-development
+
+ GET / 200 in 2.1s (next.js: 1948ms, application-code: 185ms)
+ GET / 200 in 51ms (next.js: 4ms, application-code: 47ms)
+ GET / 200 in 54ms (next.js: 5ms, application-code: 49ms)
+ GET / 200 in 47ms (next.js: 3ms, application-code: 44ms)
+✓ Compiled in 143ms
+ GET / 200 in 127ms (next.js: 45ms, application-code: 83ms)
+ GET / 200 in 48ms (next.js: 5ms, application-code: 43ms)
+ GET / 200 in 43ms (next.js: 3ms, application-code: 40ms)
+✓ Compiled in 50ms
+ GET / 200 in 118ms (next.js: 44ms, application-code: 74ms)
+ GET / 200 in 43ms (next.js: 3ms, application-code: 40ms)
+ GET / 200 in 43ms (next.js: 4ms, application-code: 38ms)
+✓ Compiled in 60ms
+ GET / 200 in 90ms (next.js: 44ms, application-code: 46ms)
+ GET / 200 in 26ms (next.js: 3ms, application-code: 24ms)
+ GET / 200 in 56ms (next.js: 37ms, application-code: 18ms)
+ GET / 200 in 71ms (next.js: 4ms, application-code: 67ms)
