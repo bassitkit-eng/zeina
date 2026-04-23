@@ -3,6 +3,7 @@ import { Inter, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import '../styles/globals.css'
 import { FavoritesProvider } from './contexts/FavoritesContext'
+import { ProductsProvider } from './contexts/ProductsContext'
 
 const _inter = Inter({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -38,9 +39,9 @@ export default function RootLayout({
   return (
     <html lang="ar" className="bg-[#FAF9F7]">
       <body className="font-sans antialiased bg-[#FAF9F7] text-[#1F1F1F]">
-        <FavoritesProvider>
-          {children}
-        </FavoritesProvider>
+        <ProductsProvider>
+          <FavoritesProvider>{children}</FavoritesProvider>
+        </ProductsProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

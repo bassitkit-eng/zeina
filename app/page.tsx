@@ -3,12 +3,14 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { ProductGridCard } from '@/components/shared/ProductGridCard'
-import { CATEGORIES, PRODUCTS_BY_CATEGORY, type CategoryId } from '@/lib/catalog'
+import { CATEGORIES, type CategoryId } from '@/lib/catalog'
 import { CATEGORY_CARD_COPY, CATEGORY_IMAGES, HERO_SLIDES } from '@/features/home/constants'
 
 export default function Home() {
+  const { productsByCategory } = useProducts()
   const [currentSlide, setCurrentSlide] = useState(0)
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export default function Home() {
         </div>
       </section>
 
-      {Object.entries(PRODUCTS_BY_CATEGORY).map(([categoryId, products]) => {
+      {Object.entries(productsByCategory).map(([categoryId, products]) => {
         const typedCategoryId = categoryId as CategoryId
         const categoryName = CATEGORIES.find((c) => c.id === typedCategoryId)?.name ?? ''
 

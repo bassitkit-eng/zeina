@@ -31,6 +31,10 @@ export function AppHeader() {
             </Link>
           ))}
 
+          <Link href="/add-product" className="text-[#1F1F1F] hover:text-[#C8A97E] transition font-semibold">
+            إضافة منتج
+          </Link>
+
           <Link
             href="/favorites"
             aria-label="المفضلة"

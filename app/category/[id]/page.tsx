@@ -2,14 +2,16 @@
 
 import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { ProductGridCard } from '@/components/shared/ProductGridCard'
-import { CATEGORY_NAMES, PRODUCTS_BY_CATEGORY, type CategoryId } from '@/lib/catalog'
+import { CATEGORY_NAMES, type CategoryId } from '@/lib/catalog'
 
 export default function CategoryPage() {
+  const { productsByCategory } = useProducts()
   const params = useParams()
   const categoryId = params.id as CategoryId
-  const products = PRODUCTS_BY_CATEGORY[categoryId] || []
+  const products = productsByCategory[categoryId] || []
 
   const [selectedLocation, setSelectedLocation] = useState('all')
   const [selectedCity, setSelectedCity] = useState('all')

@@ -3,14 +3,16 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { FavoriteIconButton } from '@/components/shared/FavoriteIconButton'
-import { ALL_PRODUCTS, CATEGORY_NAMES } from '@/lib/catalog'
+import { CATEGORY_NAMES } from '@/lib/catalog'
 
 export default function ProductPage() {
+  const { allProducts } = useProducts()
   const params = useParams()
   const productId = parseInt(params.id as string, 10)
-  const product = ALL_PRODUCTS.find((p) => p.id === productId)
+  const product = allProducts.find((p) => p.id === productId)
 
   if (!product) {
     return (

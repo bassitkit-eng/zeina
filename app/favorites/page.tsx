@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { ProductGridCard } from '@/components/shared/ProductGridCard'
 import { useFavorites } from '../contexts/FavoritesContext'
-import { ALL_PRODUCTS } from '@/lib/catalog'
 
 export default function FavoritesPage() {
+  const { allProducts } = useProducts()
   const { favorites } = useFavorites()
   const [isClient, setIsClient] = useState(false)
 
@@ -15,7 +16,7 @@ export default function FavoritesPage() {
     setIsClient(true)
   }, [])
 
-  const favoriteProducts = ALL_PRODUCTS.filter((product) => favorites.includes(product.id))
+  const favoriteProducts = allProducts.filter((product) => favorites.includes(product.id))
 
   return (
     <main className="min-h-screen bg-[#FAF9F7]">
