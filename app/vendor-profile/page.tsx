@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { FormEvent, useState } from 'react'
 import { AppHeader } from '@/components/shared/AppHeader'
@@ -34,7 +34,7 @@ export default function VendorProfilePage() {
       <section className="px-4 py-12" dir="rtl">
         <div className="max-w-4xl mx-auto rounded-2xl bg-white border border-[#E5E7EB] p-6">
           <h1 className="text-3xl font-bold text-[#1F1F1F] mb-2">بروفايل البائع</h1>
-          <p className="text-[#6B7280] mb-6">هذه البيانات تُستخدم تلقائيًا عند إضافة منتجات جديدة.</p>
+          <p className="text-[#6B7280] mb-6">هذه البيانات تستخدم تلقائيا عند إضافة منتجات جديدة.</p>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
@@ -137,7 +137,7 @@ export default function VendorProfilePage() {
                   disabled={!governorate}
                   className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                 >
-                  <option value="">{governorate ? 'اختر المدينة / المنطقة' : 'اختر المحافظة أولًا'}</option>
+                  <option value="">{governorate ? 'اختر المدينة / المنطقة' : 'اختر المحافظة أولا'}</option>
                   {cities.map((item) => (
                     <option key={item} value={item}>
                       {item}
@@ -168,4 +168,3 @@ export default function VendorProfilePage() {
     </main>
   )
 }
-

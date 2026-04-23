@@ -3,7 +3,9 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useProducts } from '@/app/contexts/ProductsContext'
-import { CATEGORIES, type CategoryId, type Product, type ProductStatus } from '@/lib/catalog'
+import { useAuth } from '@/app/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
+import { CATEGORIES, type CategoryId, type Product, type ProductId, type ProductStatus } from '@/lib/catalog'
 import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
 import { supabaseClient } from '@/lib/supabase/client'
 import { buildProductImagesPayload, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
@@ -28,7 +30,7 @@ type ProductFormState = {
 
 type ConfirmAction =
   | { type: 'delete-image'; imageIndex: number; target: 'create' | 'edit' }
-  | { type: 'delete-product'; productId: number }
+  | { type: 'delete-product'; productId: ProductId }
   | null
 
 const initialForm: ProductFormState = {
@@ -52,6 +54,8 @@ const initialForm: ProductFormState = {
 const STEPS = ['بيانات أساسية', 'التصنيف والموقع', 'معلومات التواصل', 'الصور', 'المراجعة والنشر']
 
 export default function AddProductPage() {
+  const router = useRouter()
+  const { isLoading: isAuthLoading, user } = useAuth()
   const { customProducts, addProduct, updateProduct, deleteProduct } = useProducts()
 
   const [form, setForm] = useState<ProductFormState>(initialForm)
@@ -61,7 +65,7 @@ export default function AddProductPage() {
   const [activeTab, setActiveTab] = useState<'add' | 'mine'>('add')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const editFileInputRef = useRef<HTMLInputElement | null>(null)
-  const [editingProductId, setEditingProductId] = useState<number | null>(null)
+  const [editingProductId, setEditingProductId] = useState<ProductId | null>(null)
   const [editForm, setEditForm] = useState<ProductFormState>(initialForm)
   const [editError, setEditError] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
@@ -80,6 +84,35 @@ export default function AddProductPage() {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (isAuthLoading) return
+    if (!user) {
+      router.replace('/auth')
+    }
+  }, [isAuthLoading, user, router])
+
+  if (isAuthLoading) {
+    return (
+      <main className="min-h-screen bg-[#FAF9F7]">
+        <AppHeader />
+        <section className="px-4 py-16" dir="rtl">
+          <div className="max-w-4xl mx-auto text-center text-[#6B7280]">جارٍ التحقق من تسجيل الدخول...</div>
+        </section>
+      </main>
+    )
+  }
+
+  if (!user) {
+    return (
+      <main className="min-h-screen bg-[#FAF9F7]">
+        <AppHeader />
+        <section className="px-4 py-16" dir="rtl">
+          <div className="max-w-4xl mx-auto text-center text-[#B91C1C]">برجاء تسجيل الدخول أولًا للوصول إلى صفحة إضافة المنتجات.</div>
+        </section>
+      </main>
+    )
+  }
 
   const validateStep = (stepIndex: number) => {
     if (stepIndex === 0) {
@@ -187,7 +220,7 @@ export default function AddProductPage() {
     setStep(0)
   }
 
-  const submitWithStatus = (status: ProductStatus) => {
+  const submitWithStatus = async (status: ProductStatus) => {
     if (!validateStep(0) || !validateStep(1) || !validateStep(3)) return
 
     const payload = {
@@ -216,9 +249,13 @@ export default function AddProductPage() {
       .filter((item) => Boolean(item.imageUrl))
     void buildProductImagesPayload(draftUploadProductId, uploadedImagesForInsert)
 
-    addProduct(payload)
-    resetForm()
-    setActiveTab('mine')
+    try {
+      await addProduct(payload)
+      resetForm()
+      setActiveTab('mine')
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'تعذر حفظ المنتج الآن.')
+    }
   }
 
   const onEditFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -263,7 +300,7 @@ export default function AddProductPage() {
     setEditError('')
   }
 
-  const saveEditModal = () => {
+  const saveEditModal = async () => {
     if (!editingProductId) return
     if (!editForm.name.trim()) {
       setEditError('أدخل اسم المنتج أولًا.')
@@ -283,27 +320,31 @@ export default function AddProductPage() {
       return
     }
 
-    updateProduct(editingProductId, {
-      name: editForm.name.trim(),
-      category: editForm.category,
-      productType: editForm.productType.trim() || 'عام',
-      city: editForm.city,
-      location: editForm.location,
-      price: parsedPrice,
-      contactInfo: {
-        phone: editForm.phone.trim(),
-        whatsapp: editForm.whatsapp.trim(),
-        instagram: editForm.instagram.trim(),
-        facebook: editForm.facebook.trim(),
-        tiktok: editForm.tiktok.trim(),
-      },
-      description: editForm.description.trim(),
-      imagePaths: editForm.imagePaths,
-      imageStoragePaths: editForm.imageStoragePaths,
-      status: editForm.status,
-    })
+    try {
+      await updateProduct(editingProductId, {
+        name: editForm.name.trim(),
+        category: editForm.category,
+        productType: editForm.productType.trim() || 'عام',
+        city: editForm.city,
+        location: editForm.location,
+        price: parsedPrice,
+        contactInfo: {
+          phone: editForm.phone.trim(),
+          whatsapp: editForm.whatsapp.trim(),
+          instagram: editForm.instagram.trim(),
+          facebook: editForm.facebook.trim(),
+          tiktok: editForm.tiktok.trim(),
+        },
+        description: editForm.description.trim(),
+        imagePaths: editForm.imagePaths,
+        imageStoragePaths: editForm.imageStoragePaths,
+        status: editForm.status,
+      })
 
-    closeEditModal()
+      closeEditModal()
+    } catch (updateError) {
+      setEditError(updateError instanceof Error ? updateError.message : 'تعذر حفظ التعديلات الآن.')
+    }
   }
 
   const confirmMessage = useMemo(() => {
@@ -312,7 +353,7 @@ export default function AddProductPage() {
     return 'هل أنت متأكد من حذف المنتج؟ سيتم حذف جميع بياناته.'
   }, [confirmAction])
 
-  const runConfirmAction = () => {
+  const runConfirmAction = async () => {
     if (!confirmAction) return
 
     if (confirmAction.type === 'delete-image') {
@@ -332,8 +373,12 @@ export default function AddProductPage() {
     }
 
     if (confirmAction.type === 'delete-product') {
-      deleteProduct(confirmAction.productId)
-      if (editingProductId === confirmAction.productId) closeEditModal()
+      try {
+        await deleteProduct(confirmAction.productId)
+        if (String(editingProductId) === String(confirmAction.productId)) closeEditModal()
+      } catch (deleteError) {
+        setError(deleteError instanceof Error ? deleteError.message : 'تعذر حذف المنتج الآن.')
+      }
     }
 
     setConfirmAction(null)
@@ -573,8 +618,8 @@ export default function AddProductPage() {
                   <p className="text-sm"><span className="font-semibold">عدد الصور:</span> {form.imagePaths.length}</p>
 
                   <div className="flex flex-wrap gap-3 pt-2">
-                    <button onClick={() => submitWithStatus('draft')} className="h-11 px-5 rounded-lg border border-[#7B57C8] text-[#7B57C8] font-bold">حفظ كمسودة</button>
-                    <button onClick={() => submitWithStatus('published')} className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90">نشر المنتج</button>
+                    <button onClick={() => void submitWithStatus('draft')} className="h-11 px-5 rounded-lg border border-[#7B57C8] text-[#7B57C8] font-bold">حفظ كمسودة</button>
+                    <button onClick={() => void submitWithStatus('published')} className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90">نشر المنتج</button>
                   </div>
                 </div>
               )}
@@ -644,7 +689,7 @@ export default function AddProductPage() {
             <h3 className="text-xl font-bold text-[#1F1F1F] mb-3">تأكيد الإجراء</h3>
             <p className="text-[#4B5563] mb-6">{confirmMessage}</p>
             <div className="flex gap-3">
-              <button onClick={runConfirmAction} className="flex-1 h-11 rounded-lg bg-[#DC2626] text-white font-bold hover:opacity-90 transition">تأكيد الحذف</button>
+              <button onClick={() => void runConfirmAction()} className="flex-1 h-11 rounded-lg bg-[#DC2626] text-white font-bold hover:opacity-90 transition">تأكيد الحذف</button>
               <button onClick={() => setConfirmAction(null)} className="flex-1 h-11 rounded-lg border border-[#9CA3AF] text-[#4B5563] font-bold hover:bg-[#F3F4F6] transition">إلغاء</button>
             </div>
           </div>
@@ -794,7 +839,7 @@ export default function AddProductPage() {
             {editError && <p className="text-red-600 text-sm mt-4">{editError}</p>}
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <button onClick={saveEditModal} className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 transition">
+              <button onClick={() => void saveEditModal()} className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 transition">
                 حفظ التعديلات
               </button>
               <button onClick={closeEditModal} className="h-11 px-5 rounded-lg border border-[#9CA3AF] text-[#4B5563] font-bold hover:bg-[#F3F4F6] transition">

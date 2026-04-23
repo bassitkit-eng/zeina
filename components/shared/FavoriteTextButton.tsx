@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useFavorites } from '@/app/contexts/FavoritesContext'
+import type { ProductId } from '@/lib/catalog'
 
 interface FavoriteTextButtonProps {
-  productId: number
+  productId: ProductId
 }
 
 export function FavoriteTextButton({ productId }: FavoriteTextButtonProps) {

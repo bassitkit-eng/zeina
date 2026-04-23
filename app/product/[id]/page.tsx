@@ -11,8 +11,8 @@ import { CATEGORY_NAMES } from '@/lib/catalog'
 export default function ProductPage() {
   const { allProducts } = useProducts()
   const params = useParams()
-  const productId = parseInt(params.id as string, 10)
-  const product = allProducts.find((p) => p.id === productId)
+  const productId = String(params.id)
+  const product = allProducts.find((p) => String(p.id) === productId)
 
   if (!product) {
     return (

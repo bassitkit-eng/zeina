@@ -1,4 +1,4 @@
-export const EGYPT_GOVERNORATES: Record<string, string[]> = {
+﻿export const EGYPT_GOVERNORATES: Record<string, string[]> = {
   القاهرة: ['مدينة نصر', 'مصر الجديدة', 'المعادي', 'التجمع الخامس', 'حلوان', 'شبرا', 'الزيتون', 'عين شمس', 'المقطم'],
   الجيزة: ['الدقي', 'المهندسين', 'العجوزة', 'الهرم', 'فيصل', '6 أكتوبر', 'الشيخ زايد', 'بولاق الدكرور', 'العمرانية'],
   القليوبية: ['بنها', 'شبرا الخيمة', 'قليوب', 'القناطر الخيرية', 'طوخ', 'الخانكة', 'كفر شكر'],
@@ -34,4 +34,3 @@ export function getAreasByGovernorate(governorate: string): string[] {
   const normalized = governorate.replaceAll(' ', '_')
   return EGYPT_GOVERNORATES[normalized] || []
 }
-

@@ -3,40 +3,28 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/contexts/AuthContext'
 import { useFavorites } from '@/app/contexts/FavoritesContext'
 import { CATEGORIES } from '@/lib/catalog'
-import { supabaseClient } from '@/lib/supabase/client'
 
 export function AppHeader() {
   const router = useRouter()
+  const { user, role, signOut } = useAuth()
   const { favorites } = useFavorites()
   const [isClient, setIsClient] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
-
-    supabaseClient.auth.getSession().then(({ data }) => {
-      setIsAuthenticated(Boolean(data.session))
-    })
-
-    const {
-      data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(Boolean(session))
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
   }, [])
 
   const handleLogout = async () => {
-    await supabaseClient.auth.signOut()
-    setIsAuthenticated(false)
+    await signOut()
     router.push('/')
     router.refresh()
   }
+
+  const isAuthenticated = Boolean(user)
+  const isVendor = role === 'vendor' || role === 'admin'
 
   return (
     <header className="bg-white border-b-2 border-[#E5E5E5] sticky top-0 z-50" dir="rtl">
@@ -63,6 +51,12 @@ export function AppHeader() {
             <span className="text-xl leading-none">+</span>
             <span>أضف منتجك</span>
           </Link>
+
+          {isVendor && (
+            <Link href="/vendor-dashboard" className="text-[#1F1F1F] hover:text-[#7B57C8] transition font-semibold">
+              لوحة البائع
+            </Link>
+          )}
 
           {isAuthenticated ? (
             <button

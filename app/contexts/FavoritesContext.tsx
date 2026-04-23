@@ -1,17 +1,18 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import type { ProductId } from '@/lib/catalog'
 
 interface FavoritesContextType {
-  favorites: number[]
-  toggleFavorite: (productId: number) => void
-  isFavorite: (productId: number) => boolean
+  favorites: ProductId[]
+  toggleFavorite: (productId: ProductId) => void
+  isFavorite: (productId: ProductId) => boolean
 }
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined)
 
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
-  const [favorites, setFavorites] = useState<number[]>([])
+  const [favorites, setFavorites] = useState<ProductId[]>([])
   const [isClient, setIsClient] = useState(false)
 
   // Load favorites from localStorage on mount
@@ -30,15 +31,15 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [favorites, isClient])
 
-  const toggleFavorite = (productId: number) => {
+  const toggleFavorite = (productId: ProductId) => {
     setFavorites((prev) =>
-      prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
+      prev.some((id) => String(id) === String(productId))
+        ? prev.filter((id) => String(id) !== String(productId))
         : [...prev, productId]
     )
   }
 
-  const isFavorite = (productId: number) => favorites.includes(productId)
+  const isFavorite = (productId: ProductId) => favorites.some((id) => String(id) === String(productId))
 
   return (
     <FavoritesContext.Provider value={{ favorites, toggleFavorite, isFavorite }}>

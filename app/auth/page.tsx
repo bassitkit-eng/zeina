@@ -4,14 +4,37 @@ import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { supabaseClient } from '@/lib/supabase/client'
+import { useAuth, type AppRole } from '@/app/contexts/AuthContext'
+
+async function upsertProfileRole(params: { userId: string; email: string | null; role: AppRole }) {
+  const { error } = await supabaseClient.from('profiles').upsert(
+    {
+      id: params.userId,
+      email: params.email,
+      role: params.role,
+      status: 'active',
+    },
+    { onConflict: 'id' }
+  )
+
+  if (error) throw error
+}
+
+async function getProfileRole(userId: string): Promise<AppRole | null> {
+  const { data, error } = await supabaseClient.from('profiles').select('role').eq('id', userId).maybeSingle()
+  if (error || !data?.role) return null
+  return data.role as AppRole
+}
 
 export default function AuthPage() {
   const router = useRouter()
+  const { refreshRole } = useAuth()
+  const registrationRole: AppRole = 'vendor'
+
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [message, setMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -24,9 +47,16 @@ export default function AuthPage() {
       return
     }
 
-    if (mode === 'register' && !name.trim()) {
-      setMessage('برجاء إدخال الاسم الكامل.')
-      return
+    if (mode === 'register') {
+      if (!confirmPassword.trim()) {
+        setMessage('برجاء إدخال تأكيد كلمة المرور.')
+        return
+      }
+
+      if (password !== confirmPassword) {
+        setMessage('كلمة المرور وتأكيد كلمة المرور غير متطابقين.')
+        return
+      }
     }
 
     setIsSubmitting(true)
@@ -38,8 +68,7 @@ export default function AuthPage() {
           password,
           options: {
             data: {
-              full_name: name.trim(),
-              phone: phone.trim(),
+              role: registrationRole,
             },
           },
         })
@@ -49,17 +78,19 @@ export default function AuthPage() {
           return
         }
 
-        if (data.session) {
+        if (data.user && data.session) {
+          await upsertProfileRole({ userId: data.user.id, email: data.user.email ?? email.trim(), role: registrationRole })
+          await refreshRole()
           setMessage('تم إنشاء الحساب وتسجيل الدخول بنجاح.')
-          router.push('/complete-profile')
+          router.push('/vendor-dashboard')
           return
         }
 
-        setMessage('تم إنشاء الحساب بنجاح. تحقق من بريدك الإلكتروني لتأكيد الحساب ثم سجل الدخول.')
+        setMessage('تم إنشاء الحساب بنجاح. تحقق من بريدك الإلكتروني ثم سجل الدخول.')
         return
       }
 
-      const { error } = await supabaseClient.auth.signInWithPassword({
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
         email: email.trim(),
         password,
       })
@@ -69,8 +100,21 @@ export default function AuthPage() {
         return
       }
 
+      const roleFromProfile = await getProfileRole(data.user.id)
+      const roleFromMetadata = (data.user?.user_metadata?.role as AppRole | undefined) ?? 'vendor'
+      const resolvedRole = roleFromProfile ?? roleFromMetadata
+
+      if (!roleFromProfile) {
+        await upsertProfileRole({
+          userId: data.user.id,
+          email: data.user.email ?? email.trim(),
+          role: resolvedRole,
+        })
+      }
+
+      await refreshRole()
       setMessage('تم تسجيل الدخول بنجاح.')
-      router.push('/vendor-dashboard')
+      router.push(resolvedRole === 'vendor' ? '/vendor-dashboard' : '/')
     } finally {
       setIsSubmitting(false)
     }
@@ -101,29 +145,6 @@ export default function AuthPage() {
           </div>
 
           <form onSubmit={onSubmit} className="space-y-4">
-            {mode === 'register' && (
-              <>
-                <div>
-                  <label className="block mb-2 text-sm font-extrabold text-black">الاسم الكامل</label>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="مثال: أحمد محمد"
-                    className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                  />
-                </div>
-                <div>
-                  <label className="block mb-2 text-sm font-extrabold text-black">رقم الهاتف</label>
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="مثال: 01012345678"
-                    className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                  />
-                </div>
-              </>
-            )}
-
             <div>
               <label className="block mb-2 text-sm font-extrabold text-black">البريد الإلكتروني</label>
               <input
@@ -145,6 +166,19 @@ export default function AuthPage() {
                 className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
               />
             </div>
+
+            {mode === 'register' && (
+              <div>
+                <label className="block mb-2 text-sm font-extrabold text-black">تأكيد كلمة المرور</label>
+                <input
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  type="password"
+                  placeholder="********"
+                  className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                />
+              </div>
+            )}
 
             <button
               type="submit"

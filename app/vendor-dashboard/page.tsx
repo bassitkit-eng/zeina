@@ -1,12 +1,50 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { useProducts } from '@/app/contexts/ProductsContext'
+import { useAuth } from '@/app/contexts/AuthContext'
 import { CATEGORIES } from '@/lib/catalog'
 
 export default function VendorDashboardPage() {
+  const router = useRouter()
+  const { isLoading: isAuthLoading, user, role } = useAuth()
   const { customProducts } = useProducts()
+
+  useEffect(() => {
+    if (isAuthLoading) return
+    if (!user) {
+      router.replace('/auth')
+      return
+    }
+    if (role !== 'vendor' && role !== 'admin') {
+      router.replace('/')
+    }
+  }, [isAuthLoading, user, role, router])
+
+  if (isAuthLoading) {
+    return (
+      <main className="min-h-screen bg-[#FAF9F7]">
+        <AppHeader />
+        <section className="px-4 py-16" dir="rtl">
+          <div className="max-w-4xl mx-auto text-center text-[#6B7280]">جارٍ التحقق من صلاحيات الحساب...</div>
+        </section>
+      </main>
+    )
+  }
+
+  if (!user || (role !== 'vendor' && role !== 'admin')) {
+    return (
+      <main className="min-h-screen bg-[#FAF9F7]">
+        <AppHeader />
+        <section className="px-4 py-16" dir="rtl">
+          <div className="max-w-4xl mx-auto text-center text-[#B91C1C]">غير مسموح لك بالوصول إلى لوحة البائع.</div>
+        </section>
+      </main>
+    )
+  }
 
   const publishedCount = customProducts.filter((p) => p.status === 'published').length
   const draftCount = customProducts.filter((p) => p.status === 'draft' || !p.status).length
@@ -70,4 +108,3 @@ export default function VendorDashboardPage() {
     </main>
   )
 }
-

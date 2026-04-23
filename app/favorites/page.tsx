@@ -16,7 +16,7 @@ export default function FavoritesPage() {
     setIsClient(true)
   }, [])
 
-  const favoriteProducts = allProducts.filter((product) => favorites.includes(product.id))
+  const favoriteProducts = allProducts.filter((product) => favorites.some((id) => String(id) === String(product.id)))
 
   return (
     <main className="min-h-screen bg-[#FAF9F7]">

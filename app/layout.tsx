@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import '../styles/globals.css'
+import { AuthProvider } from './contexts/AuthContext'
 import { FavoritesProvider } from './contexts/FavoritesContext'
 import { ProductsProvider } from './contexts/ProductsContext'
 
@@ -39,9 +40,11 @@ export default function RootLayout({
   return (
     <html lang="ar" className="bg-[#FAF9F7]">
       <body className="font-sans antialiased bg-[#FAF9F7] text-[#1F1F1F]">
-        <ProductsProvider>
-          <FavoritesProvider>{children}</FavoritesProvider>
-        </ProductsProvider>
+        <AuthProvider>
+          <ProductsProvider>
+            <FavoritesProvider>{children}</FavoritesProvider>
+          </ProductsProvider>
+        </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
