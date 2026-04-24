@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/contexts/AuthContext'
 import { useFavorites } from '@/app/contexts/FavoritesContext'
@@ -14,9 +14,22 @@ export function AppHeader() {
   const [isClient, setIsClient] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    const onDocumentClick = (event: MouseEvent) => {
+      if (!accountMenuRef.current) return
+      if (!accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocumentClick)
+    return () => document.removeEventListener('mousedown', onDocumentClick)
   }, [])
 
   const handleLogout = () => {
@@ -28,6 +41,13 @@ export function AppHeader() {
 
   const isAuthenticated = Boolean(user)
   const isVendor = role === 'vendor' || role === 'admin'
+  const displayName =
+    (user?.user_metadata?.full_name as string | undefined)?.trim() ||
+    (user?.user_metadata?.name as string | undefined)?.trim() ||
+    (user?.email || '').trim() ||
+    'حساب'
+  const displayEmail = (user?.email || '').trim()
+  const displayInitial = displayName.charAt(0).toUpperCase()
 
   return (
     <header className="bg-white border-b-2 border-[#E5E5E5] sticky top-0 z-50" dir="rtl">
@@ -55,32 +75,9 @@ export function AppHeader() {
             <span>أضف منتجك</span>
           </Link>
 
-          {isAuthenticated && (
-            <Link href="/account-task" className="text-[#1F1F1F] hover:text-[#DC2626] transition font-semibold">
-              مهمة الحساب
-            </Link>
-          )}
-
           {isVendor && (
             <Link href="/vendor-dashboard" className="text-[#1F1F1F] hover:text-[#7B57C8] transition font-semibold">
               لوحة البائع
-            </Link>
-          )}
-
-          {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={() => setIsLogoutConfirmOpen(true)}
-              className="h-10 px-4 rounded-xl bg-[#DC2626] text-white font-bold flex items-center justify-center hover:bg-[#B91C1C] transition"
-            >
-              تسجيل الخروج
-            </button>
-          ) : (
-            <Link
-              href="/auth"
-              className="h-10 px-4 rounded-xl border border-[#7B57C8] text-[#7B57C8] font-bold flex items-center justify-center hover:bg-[#7B57C8] hover:text-white transition"
-            >
-              تسجيل الدخول
             </Link>
           )}
 
@@ -98,6 +95,54 @@ export function AppHeader() {
               </span>
             )}
           </Link>
+
+          {isAuthenticated ? (
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                className="h-11 w-11 rounded-full border-2 border-[#C8A97E] bg-[#13233B] text-white font-extrabold flex items-center justify-center shadow-sm hover:opacity-90 transition"
+                aria-label="الحساب"
+              >
+                {displayInitial}
+              </button>
+
+              {isAccountMenuOpen && (
+                <div
+                  className="absolute left-0 mt-2 w-80 rounded-2xl border border-[#C8A97E]/30 bg-gradient-to-b from-[#1A2C49] to-[#0F1E33] shadow-2xl p-3 z-[80]"
+                  dir="rtl"
+                >
+                  <div className="rounded-xl border border-[#C8A97E]/25 bg-[#13233B]/70 px-3 py-3 flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-full bg-[#7B57C8] text-white font-bold flex items-center justify-center shrink-0">
+                      {displayInitial}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-base font-extrabold text-white truncate">{displayName}</p>
+                      <p className="text-sm text-[#DCCAB2] truncate">{displayEmail || '-'}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountMenuOpen(false)
+                      setIsLogoutConfirmOpen(true)
+                    }}
+                    className="mt-3 w-full h-11 rounded-xl border border-[#C8A97E]/40 bg-[#0F1E33] text-[#F4E5D0] font-extrabold hover:bg-[#13233B] transition"
+                  >
+                    تسجيل الخروج
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/auth"
+              className="h-10 px-4 rounded-xl border border-[#7B57C8] text-[#7B57C8] font-bold flex items-center justify-center hover:bg-[#7B57C8] hover:text-white transition"
+            >
+              تسجيل الدخول
+            </Link>
+          )}
         </nav>
       </div>
 
