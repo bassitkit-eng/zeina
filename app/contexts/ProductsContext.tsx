@@ -247,7 +247,20 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       .select('id')
       .single()
 
-    if (createError) throw createError
+    if (createError) {
+      // Handles race-condition: another request created the row first.
+      if (createError.code === '23505') {
+        const { data: afterConflict, error: afterConflictError } = await supabaseClient
+          .from('vendor_profiles')
+          .select('id')
+          .eq('user_id', currentUserId)
+          .single()
+
+        if (afterConflictError) throw afterConflictError
+        return afterConflict.id as string
+      }
+      throw createError
+    }
     return created.id as string
   }
 

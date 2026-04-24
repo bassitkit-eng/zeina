@@ -1,10 +1,28 @@
 ﻿'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { supabaseClient } from '@/lib/supabase/client'
 import { useAuth, type AppRole } from '@/app/contexts/AuthContext'
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = 4000): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error('Operation timeout')), timeoutMs)
+    }),
+  ])
+}
+
+async function withAuthTimeout<T>(promise: Promise<T>, timeoutMs = 12000): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error('انتهت مهلة الطلب. حاول مرة أخرى.')), timeoutMs)
+    }),
+  ])
+}
 
 async function upsertProfileRole(params: { userId: string; email: string | null; role: AppRole }) {
   const { error } = await supabaseClient.from('profiles').upsert(
@@ -28,7 +46,7 @@ async function getProfileRole(userId: string): Promise<AppRole | null> {
 
 export default function AuthPage() {
   const router = useRouter()
-  const { refreshRole } = useAuth()
+  const { isLoading, user, refreshRole } = useAuth()
   const registrationRole: AppRole = 'vendor'
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -37,6 +55,11 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [message, setMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (isLoading) return
+    if (user) router.replace('/')
+  }, [isLoading, user, router])
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -63,15 +86,18 @@ export default function AuthPage() {
 
     try {
       if (mode === 'register') {
-        const { data, error } = await supabaseClient.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: {
-              role: registrationRole,
+        const { data, error } = await withAuthTimeout(
+          supabaseClient.auth.signUp({
+            email: email.trim(),
+            password,
+            options: {
+              data: {
+                role: registrationRole,
+              },
             },
-          },
-        })
+          }),
+          12000
+        )
 
         if (error) {
           setMessage(error.message)
@@ -79,42 +105,52 @@ export default function AuthPage() {
         }
 
         if (data.user && data.session) {
-          await upsertProfileRole({ userId: data.user.id, email: data.user.email ?? email.trim(), role: registrationRole })
-          await refreshRole()
-          setMessage('تم إنشاء الحساب وتسجيل الدخول بنجاح.')
-          router.push('/vendor-dashboard')
+          void withTimeout(
+            upsertProfileRole({ userId: data.user.id, email: data.user.email ?? email.trim(), role: registrationRole }),
+            4000
+          ).catch(() => null)
+          void withTimeout(refreshRole(), 4000).catch(() => null)
+          router.replace('/')
           return
         }
 
-        setMessage('تم إنشاء الحساب بنجاح. تحقق من بريدك الإلكتروني ثم سجل الدخول.')
+        setMessage('تم إنشاء الحساب بنجاح. الآن قم بتسجيل الدخول.')
+        setMode('login')
         return
       }
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      })
+      const { data, error } = await withAuthTimeout(
+        supabaseClient.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        }),
+        12000
+      )
 
       if (error) {
         setMessage(error.message)
         return
       }
 
-      const roleFromProfile = await getProfileRole(data.user.id)
+      const roleFromProfile = await withAuthTimeout(getProfileRole(data.user.id), 6000)
       const roleFromMetadata = (data.user?.user_metadata?.role as AppRole | undefined) ?? 'vendor'
       const resolvedRole = roleFromProfile ?? roleFromMetadata
 
       if (!roleFromProfile) {
-        await upsertProfileRole({
-          userId: data.user.id,
-          email: data.user.email ?? email.trim(),
-          role: resolvedRole,
-        })
+        void withTimeout(
+          upsertProfileRole({
+            userId: data.user.id,
+            email: data.user.email ?? email.trim(),
+            role: resolvedRole,
+          }),
+          4000
+        ).catch(() => null)
       }
 
-      await refreshRole()
-      setMessage('تم تسجيل الدخول بنجاح.')
-      router.push(resolvedRole === 'vendor' ? '/vendor-dashboard' : '/')
+      void withTimeout(refreshRole(), 4000).catch(() => null)
+      router.replace('/')
+    } catch (submitError) {
+      setMessage(submitError instanceof Error ? submitError.message : 'حدث خطأ غير متوقع. حاول مرة أخرى.')
     } finally {
       setIsSubmitting(false)
     }

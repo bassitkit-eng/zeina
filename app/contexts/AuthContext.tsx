@@ -81,7 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = async () => {
-    await supabaseClient.auth.signOut()
+    const { error } = await supabaseClient.auth.signOut({ scope: 'local' })
+    if (error) {
+      // Ignore stale/invalid-session logout errors to keep UX smooth.
+      if (error.status !== 403) throw error
+    }
     setSession(null)
     setUser(null)
     setRole(null)
@@ -100,4 +104,3 @@ export function useAuth() {
   if (!context) throw new Error('useAuth must be used within AuthProvider')
   return context
 }
-

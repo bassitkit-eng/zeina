@@ -1,0 +1,17 @@
+﻿name = "zeina-api"
+main = "src/index.ts"
+compatibility_date = "2026-04-23"
+
+[[r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "zeina-images"
+
+[vars]
+SUPABASE_URL = "https://ftlmhdzsmdwaybyeoazp.supabase.co"
+# Optional if you want direct public URL instead of /objects/{key}
+# R2_PUBLIC_BASE_URL = "https://<your-r2-public-domain>"
+# Optional protection for /cleanup endpoint
+# CLEANUP_SECRET = "change-me"
+
+[triggers]
+crons = ["*/5 * * * *"]

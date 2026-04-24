@@ -74,6 +74,11 @@ export default function AddProductPage() {
 
   const areaOptions = useMemo(() => getAreasByGovernorate(form.city), [form.city])
   const editAreaOptions = useMemo(() => getAreasByGovernorate(editForm.city), [editForm.city])
+  const confirmMessage = useMemo(() => {
+    if (!confirmAction) return ''
+    if (confirmAction.type === 'delete-image') return 'هل أنت متأكد من حذف هذه الصورة؟ لا يمكن التراجع بعد الحذف.'
+    return 'هل أنت متأكد من حذف المنتج؟ سيتم حذف جميع بياناته.'
+  }, [confirmAction])
 
   useEffect(() => {
     let isMounted = true
@@ -346,12 +351,6 @@ export default function AddProductPage() {
       setEditError(updateError instanceof Error ? updateError.message : 'تعذر حفظ التعديلات الآن.')
     }
   }
-
-  const confirmMessage = useMemo(() => {
-    if (!confirmAction) return ''
-    if (confirmAction.type === 'delete-image') return 'هل أنت متأكد من حذف هذه الصورة؟ لا يمكن التراجع بعد الحذف.'
-    return 'هل أنت متأكد من حذف المنتج؟ سيتم حذف جميع بياناته.'
-  }, [confirmAction])
 
   const runConfirmAction = async () => {
     if (!confirmAction) return
