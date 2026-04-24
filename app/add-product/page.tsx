@@ -6,8 +6,9 @@ import { useProducts } from '@/app/contexts/ProductsContext'
 import { useAuth } from '@/app/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { CATEGORIES, type CategoryId, type Product, type ProductId, type ProductStatus } from '@/lib/catalog'
-import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
+import { GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
 import { buildProductImagesPayload, deleteProductImageByStoragePath, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
+import { fetchMarketOptions, type MarketOptions } from '@/lib/services/marketOptions'
 
 type ProductFormState = {
   name: string
@@ -94,9 +95,14 @@ export default function AddProductPage() {
   const [draftUploadProductId, setDraftUploadProductId] = useState(() => crypto.randomUUID())
   const [isUploading, setIsUploading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [marketOptions, setMarketOptions] = useState<MarketOptions | null>(null)
 
-  const areaOptions = useMemo(() => getAreasByGovernorate(form.city), [form.city])
-  const editAreaOptions = useMemo(() => getAreasByGovernorate(editForm.city), [editForm.city])
+  const categoryOptions = marketOptions?.categories || CATEGORIES
+  const governorateOptions = marketOptions?.governorates || GOVERNORATE_OPTIONS
+  const areaOptions = useMemo(() => (form.city ? marketOptions?.citiesByGovernorate[form.city] || [] : []), [form.city, marketOptions])
+  const editAreaOptions = useMemo(() => (editForm.city ? marketOptions?.citiesByGovernorate[editForm.city] || [] : []), [editForm.city, marketOptions])
+  const formSubcategoryOptions = useMemo(() => marketOptions?.subcategoriesByCategory[form.category] || [], [form.category, marketOptions])
+  const editSubcategoryOptions = useMemo(() => marketOptions?.subcategoriesByCategory[editForm.category] || [], [editForm.category, marketOptions])
   const confirmMessage = useMemo(() => {
     if (!confirmAction) return ''
     if (confirmAction.type === 'delete-image') return 'هل أنت متأكد من حذف هذه الصورة؟ لا يمكن التراجع بعد الحذف.'
@@ -109,6 +115,17 @@ export default function AddProductPage() {
       router.replace('/auth')
     }
   }, [isAuthLoading, user, router])
+
+  useEffect(() => {
+    let isMounted = true
+    void fetchMarketOptions().then((options) => {
+      if (!isMounted) return
+      setMarketOptions(options)
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   if (isAuthLoading) {
     return (
@@ -511,12 +528,39 @@ export default function AddProductPage() {
                     <label className="block mb-2 text-sm font-extrabold text-black">التصنيف الرئيسي</label>
                     <select
                       value={form.category}
-                      onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value as CategoryId }))}
+                      onChange={(e) =>
+                        setForm((prev) => {
+                          const nextCategory = e.target.value as CategoryId
+                          const nextTypeOptions = marketOptions?.subcategoriesByCategory[nextCategory] || []
+                          const keepCurrentType = prev.productType !== 'عام' && nextTypeOptions.includes(prev.productType)
+                          return {
+                            ...prev,
+                            category: nextCategory,
+                            productType: keepCurrentType ? prev.productType : nextTypeOptions[0] || 'عام',
+                          }
+                        })
+                      }
                       className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                     >
-                      {CATEGORIES.map((category) => (
+                      {categoryOptions.map((category) => (
                         <option key={category.id} value={category.id}>
                           {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-extrabold text-black">التصنيف الفرعي</label>
+                    <select
+                      value={form.productType}
+                      onChange={(e) => setForm((prev) => ({ ...prev, productType: e.target.value }))}
+                      className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
+                    >
+                      <option value="عام">عام</option>
+                      {formSubcategoryOptions.map((subcategory) => (
+                        <option key={subcategory} value={subcategory}>
+                          {subcategory}
                         </option>
                       ))}
                     </select>
@@ -531,7 +575,7 @@ export default function AddProductPage() {
                         className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                       >
                         <option value="">اختر المحافظة</option>
-                        {GOVERNORATE_OPTIONS.map((governorate) => (
+                        {governorateOptions.map((governorate) => (
                           <option key={governorate} value={governorate}>
                             {governorate}
                           </option>
@@ -661,7 +705,7 @@ export default function AddProductPage() {
                 <div className="space-y-4 text-[#374151]">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <p><span className="font-semibold">الاسم:</span> {form.name || '-'}</p>
-                    <p><span className="font-semibold">التصنيف:</span> {CATEGORIES.find((c) => c.id === form.category)?.name}</p>
+                    <p><span className="font-semibold">التصنيف:</span> {categoryOptions.find((c) => c.id === form.category)?.name}</p>
                     <p><span className="font-semibold">النوع:</span> {form.productType === 'عام' ? '-' : form.productType}</p>
                     <p><span className="font-semibold">السعر:</span> {form.price ? `EGP ${form.price}` : '-'}</p>
                     <p><span className="font-semibold">المحافظة:</span> {form.city || '-'}</p>
@@ -746,7 +790,7 @@ export default function AddProductPage() {
                         <div className="flex items-start justify-between gap-3">
                           <p className="font-bold text-[#1F1F1F] text-lg leading-snug line-clamp-2">{product.name}</p>
                           <span className="text-xs bg-[#F3EBDD] text-[#7A5E37] px-2 py-1 rounded-full whitespace-nowrap">
-                            {CATEGORIES.find((c) => c.id === product.category)?.name}
+                            {categoryOptions.find((c) => c.id === product.category)?.name}
                           </span>
                         </div>
 
@@ -807,10 +851,21 @@ export default function AddProductPage() {
                 <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">التصنيف</label>
                 <select
                   value={editForm.category}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value as CategoryId }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => {
+                      const nextCategory = e.target.value as CategoryId
+                      const nextTypeOptions = marketOptions?.subcategoriesByCategory[nextCategory] || []
+                      const keepCurrentType = prev.productType !== 'عام' && nextTypeOptions.includes(prev.productType)
+                      return {
+                        ...prev,
+                        category: nextCategory,
+                        productType: keepCurrentType ? prev.productType : nextTypeOptions[0] || 'عام',
+                      }
+                    })
+                  }
                   className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                 >
-                  {CATEGORIES.map((category) => (
+                  {categoryOptions.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
@@ -840,7 +895,7 @@ export default function AddProductPage() {
                   className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
                 >
                   <option value="">اختر المحافظة</option>
-                  {GOVERNORATE_OPTIONS.map((governorate) => (
+                  {governorateOptions.map((governorate) => (
                     <option key={governorate} value={governorate}>
                       {governorate}
                     </option>
@@ -878,12 +933,18 @@ export default function AddProductPage() {
 
               <div>
                 <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">نوع المنتج (اختياري)</label>
-                <input
-                  value={editForm.productType === 'عام' ? '' : editForm.productType}
+                <select
+                  value={editForm.productType}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, productType: e.target.value }))}
-                  placeholder="مثال: زفاف / خطوبة"
                   className="w-full h-11 rounded-lg border border-[#DCCAB2] bg-white px-3 text-[#1F1F1F]"
-                />
+                >
+                  <option value="عام">عام</option>
+                  {editSubcategoryOptions.map((subcategory) => (
+                    <option key={subcategory} value={subcategory}>
+                      {subcategory}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="sm:col-span-2">

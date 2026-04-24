@@ -6,7 +6,7 @@ import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { ProductGridCard } from '@/components/shared/ProductGridCard'
 import { CATEGORY_NAMES, type CategoryId } from '@/lib/catalog'
-import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
+import { fetchMarketOptions, type MarketOptions } from '@/lib/services/marketOptions'
 
 export default function CategoryPage() {
   const { productsByCategory } = useProducts()
@@ -19,20 +19,42 @@ export default function CategoryPage() {
   const [selectedType, setSelectedType] = useState('all')
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
+  const [marketOptions, setMarketOptions] = useState<MarketOptions | null>(null)
 
-  const cityOptions = useMemo(() => ['all', ...GOVERNORATE_OPTIONS], [])
+  useEffect(() => {
+    let isMounted = true
+    void fetchMarketOptions().then((options) => {
+      if (!isMounted) return
+      setMarketOptions(options)
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const cityOptions = useMemo(() => {
+    const productCities = products.map((product) => product.city).filter(Boolean)
+    const dbCities = marketOptions?.governorates || []
+    return ['all', ...Array.from(new Set([...dbCities, ...productCities]))]
+  }, [marketOptions, products])
+
   const locationOptions = useMemo(() => {
     if (selectedCity === 'all') {
-      const allEgyptAreas = Array.from(new Set(GOVERNORATE_OPTIONS.flatMap((governorate) => getAreasByGovernorate(governorate))))
+      const allDbAreas = Object.values(marketOptions?.citiesByGovernorate || {}).flat()
       const productAreas = Array.from(new Set(products.map((product) => product.location)))
-      return ['all', ...Array.from(new Set([...allEgyptAreas, ...productAreas]))]
+      return ['all', ...Array.from(new Set([...allDbAreas, ...productAreas]))]
     }
 
-    const areasByGovernorate = getAreasByGovernorate(selectedCity)
+    const areasByGovernorate = marketOptions?.citiesByGovernorate[selectedCity] || []
     const productAreasForCity = products.filter((product) => product.city === selectedCity).map((product) => product.location)
     return ['all', ...Array.from(new Set([...areasByGovernorate, ...productAreasForCity]))]
-  }, [selectedCity, products])
-  const typeOptions = useMemo(() => ['all', ...Array.from(new Set(products.map((product) => product.productType)))], [products])
+  }, [selectedCity, products, marketOptions])
+
+  const typeOptions = useMemo(() => {
+    const dbTypes = marketOptions?.subcategoriesByCategory[categoryId] || []
+    const productTypes = products.map((product) => product.productType).filter(Boolean)
+    return ['all', ...Array.from(new Set([...dbTypes, ...productTypes]))]
+  }, [categoryId, marketOptions, products])
 
   useEffect(() => {
     setSelectedLocation('all')

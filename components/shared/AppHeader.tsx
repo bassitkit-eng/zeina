@@ -58,6 +58,10 @@ export function AppHeader() {
         </Link>
 
         <nav className="flex-1 flex items-center justify-center gap-8">
+          <Link href="/" className="text-lg text-[#1F1F1F] hover:text-[#C8A97E] transition font-extrabold whitespace-nowrap">
+            الرئيسية
+          </Link>
+
           {CATEGORIES.map((category) => (
             <Link key={category.id} href={`/category/${category.id}`} className="text-lg text-[#1F1F1F] hover:text-[#C8A97E] transition font-extrabold whitespace-nowrap">
               {category.name}
