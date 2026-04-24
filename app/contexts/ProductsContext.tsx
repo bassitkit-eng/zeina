@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { ALL_PRODUCTS, type CategoryId, type Product, type ProductContactInfo, type ProductId, type ProductStatus } from '@/lib/catalog'
 import { supabaseClient } from '@/lib/supabase/client'
+import { deleteProductImageByStoragePath } from '@/lib/services/productImageUpload'
 
 type ProductFormInput = {
   name: string
@@ -132,6 +133,10 @@ async function runDbCall<T>(operation: () => Promise<T>, fallbackMessage: string
 
 function cityKey(governorateId: string, cityName: string) {
   return `${governorateId}::${normalizeText(cityName)}`
+}
+
+function uniqueStoragePaths(paths: Array<string | null | undefined>) {
+  return Array.from(new Set(paths.map((item) => (item || '').trim()).filter(Boolean)))
 }
 
 function matchAppCategory(category: CategoryRow): CategoryId | null {
@@ -314,19 +319,29 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }
 
   const getOrCreateVendorProfileId = async (currentUserId: string) => {
-    const { data: existing, error: existingError } = await runDbCall(
-      () =>
-        supabaseClient
-          .from('vendor_profiles')
-          .select('id')
-          .eq('user_id', currentUserId)
-          .maybeSingle(),
-      'تعذر قراءة بروفايل البائع.'
-    )
+    let existingError: unknown = null
 
-    if (existingError) throw asError(existingError, 'تعذر قراءة بروفايل البائع.')
-    if (existing?.id) return existing.id as string
+    try {
+      const { data: existing, error } = await runDbCall(
+        () =>
+          supabaseClient
+            .from('vendor_profiles')
+            .select('id')
+            .eq('user_id', currentUserId)
+            .maybeSingle(),
+        'تعذر قراءة بروفايل البائع.'
+      )
 
+      if (error) {
+        existingError = error
+      } else if (existing?.id) {
+        return existing.id as string
+      }
+    } catch (error) {
+      existingError = error
+    }
+
+    // If read fails or row does not exist, try creating directly.
     const { data: created, error: createError } = await runDbCall(
       () =>
         supabaseClient
@@ -337,25 +352,57 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       'تعذر إنشاء بروفايل البائع.'
     )
 
-    if (createError) {
-      // Handles race-condition: another request created the row first.
-      if (createError.code === '23505' || createError.status === 409) {
-        const { data: afterConflict, error: afterConflictError } = await runDbCall(
-          () =>
-            supabaseClient
-              .from('vendor_profiles')
-              .select('id')
-              .eq('user_id', currentUserId)
-              .single(),
-          'تعذر قراءة بروفايل البائع بعد التعارض.'
-        )
-
-        if (afterConflictError) throw asError(afterConflictError, 'تعذر قراءة بروفايل البائع بعد التعارض.')
-        return afterConflict.id as string
-      }
-      throw asError(createError, 'تعذر إنشاء بروفايل البائع.')
+    if (!createError && created?.id) {
+      return created.id as string
     }
-    return created.id as string
+
+    // Handles race-condition: another request created the row first.
+    if (createError && (createError.code === '23505' || createError.status === 409)) {
+      const { data: afterConflict, error: afterConflictError } = await runDbCall(
+        () =>
+          supabaseClient
+            .from('vendor_profiles')
+            .select('id')
+            .eq('user_id', currentUserId)
+            .single(),
+        'تعذر قراءة بروفايل البائع بعد التعارض.'
+      )
+
+      if (afterConflictError) throw asError(afterConflictError, 'تعذر قراءة بروفايل البائع بعد التعارض.')
+      if (afterConflict?.id) return afterConflict.id as string
+    }
+
+    if (createError) throw asError(createError, 'تعذر إنشاء بروفايل البائع.')
+    if (existingError) throw asError(existingError, 'تعذر قراءة بروفايل البائع.')
+    throw new Error('تعذر إنشاء أو قراءة بروفايل البائع.')
+  }
+
+  const loadProductStoragePaths = async (productId: string) => {
+    const [{ data: productRow }, { data: imageRows }] = await Promise.all([
+      runDbCall(
+        () => supabaseClient.from('products').select('cover_storage_path').eq('id', productId).maybeSingle(),
+        'Unable to read product cover path.'
+      ),
+      runDbCall(
+        () => supabaseClient.from('product_images').select('storage_path').eq('product_id', productId),
+        'Unable to read product image paths.'
+      ),
+    ])
+
+    const coverPath = productRow?.cover_storage_path ? String(productRow.cover_storage_path) : ''
+    const imagePaths = (imageRows || []).map((row) => (row.storage_path ? String(row.storage_path) : ''))
+    return uniqueStoragePaths([coverPath, ...imagePaths])
+  }
+
+  const deleteR2PathsBestEffort = async (paths: string[]) => {
+    const uniquePaths = uniqueStoragePaths(paths)
+    if (uniquePaths.length === 0) return
+
+    const results = await Promise.allSettled(uniquePaths.map((path) => deleteProductImageByStoragePath(path)))
+    const failedCount = results.filter((item) => item.status === 'rejected').length
+    if (failedCount > 0) {
+      console.warn(`R2 direct delete failed for ${failedCount}/${uniquePaths.length} paths.`)
+    }
   }
 
   const fetchPublished = async (lookup: LookupMaps) => {
@@ -527,6 +574,14 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     const cityId = governorateId ? lookup.cityByGovernorateAndName.get(cityKey(governorateId, input.location)) || null : null
     const vendorProfileId = await getOrCreateVendorProfileId(currentUserId)
     await syncVendorContact(vendorProfileId, input, governorateId, cityId)
+    const productId = String(id)
+
+    let oldStoragePaths: string[] = []
+    try {
+      oldStoragePaths = await loadProductStoragePaths(productId)
+    } catch (error) {
+      console.warn('Failed to load old storage paths before update:', error)
+    }
 
     const { error: updateError } = await supabaseClient
       .from('products')
@@ -546,8 +601,6 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     if (updateError) throw asError(updateError, 'تعذر تحديث المنتج.')
 
-    const productId = String(id)
-
     const { error: deleteImagesError } = await supabaseClient.from('product_images').delete().eq('product_id', productId)
     if (deleteImagesError) throw asError(deleteImagesError, 'تعذر تحديث صور المنتج.')
 
@@ -563,6 +616,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       const { error: imagesError } = await supabaseClient.from('product_images').insert(imagesPayload)
       if (imagesError) throw asError(imagesError, 'تعذر حفظ صور المنتج.')
     }
+
+    const nextStoragePaths = uniqueStoragePaths(input.imageStoragePaths || [])
+    const pathsToDelete = oldStoragePaths.filter((path) => !nextStoragePaths.includes(path))
+    void deleteR2PathsBestEffort(pathsToDelete)
 
     void refreshProducts(currentUserId)
   }
@@ -582,13 +639,25 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
 
     const productId = String(id)
+    let storagePaths: string[] = []
+
+    try {
+      storagePaths = await loadProductStoragePaths(productId)
+    } catch (error) {
+      console.warn('Failed to load product storage paths before delete:', error)
+    }
 
     const { error: deleteImagesError } = await supabaseClient.from('product_images').delete().eq('product_id', productId)
-    if (deleteImagesError) throw asError(deleteImagesError, 'تعذر حذف صور المنتج.')
+    if (deleteImagesError) {
+      // Do not block product deletion if explicit image-delete is denied by RLS;
+      // FK cascade can still remove related rows when deleting the product.
+      console.warn('Delete product_images warning:', deleteImagesError)
+    }
 
     const { error: deleteProductError } = await supabaseClient.from('products').delete().eq('id', productId)
     if (deleteProductError) throw asError(deleteProductError, 'تعذر حذف المنتج.')
 
+    void deleteR2PathsBestEffort(storagePaths)
     void refreshProducts(currentUserId)
   }
 

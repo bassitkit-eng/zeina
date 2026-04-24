@@ -7,7 +7,7 @@ import { useAuth } from '@/app/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { CATEGORIES, type CategoryId, type Product, type ProductId, type ProductStatus } from '@/lib/catalog'
 import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
-import { buildProductImagesPayload, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
+import { buildProductImagesPayload, deleteProductImageByStoragePath, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
 
 type ProductFormState = {
   name: string
@@ -404,6 +404,11 @@ export default function AddProductPage() {
     if (!confirmAction) return
 
     if (confirmAction.type === 'delete-image') {
+      const storagePathToDelete =
+        confirmAction.target === 'create'
+          ? form.imageStoragePaths[confirmAction.imageIndex]
+          : editForm.imageStoragePaths[confirmAction.imageIndex]
+
       if (confirmAction.target === 'create') {
         setForm((prev) => ({
           ...prev,
@@ -416,6 +421,12 @@ export default function AddProductPage() {
           imagePaths: prev.imagePaths.filter((_, i) => i !== confirmAction.imageIndex),
           imageStoragePaths: prev.imageStoragePaths.filter((_, i) => i !== confirmAction.imageIndex),
         }))
+      }
+
+      if (storagePathToDelete) {
+        void deleteProductImageByStoragePath(storagePathToDelete).catch((error) => {
+          console.warn('Failed to delete image from R2 after removing from form:', error)
+        })
       }
     }
 

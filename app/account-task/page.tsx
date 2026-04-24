@@ -12,6 +12,11 @@ type DeleteReport = {
     products: number
     storagePaths: number
   }
+  directR2Delete?: {
+    requested: number
+    deleted: number
+    failed: number
+  }
   supabaseAfterDelete: {
     profileExists: boolean
     vendorProfilesRemaining: number
@@ -123,6 +128,15 @@ export default function AccountTaskPage() {
                 <p>Storage Paths: {report.beforeDelete.storagePaths}</p>
               </div>
 
+              {report.directR2Delete && (
+                <div className="text-sm text-[#374151]">
+                  <p className="font-bold text-[#111827]">محاولة حذف مباشر من R2 (قبل حذف الحساب)</p>
+                  <p>requested: {report.directR2Delete.requested}</p>
+                  <p>deleted: {report.directR2Delete.deleted}</p>
+                  <p>failed: {report.directR2Delete.failed}</p>
+                </div>
+              )}
+
               <div className="text-sm text-[#374151]">
                 <p className="font-bold text-[#111827]">Supabase بعد الحذف</p>
                 <p>profileExists: {String(report.supabaseAfterDelete.profileExists)}</p>
@@ -155,4 +169,3 @@ export default function AccountTaskPage() {
     </main>
   )
 }
-

@@ -11,6 +11,7 @@ type WorkerUploadResponse = {
 }
 
 const WORKER_UPLOAD_URL = 'https://zeina-api.zeinaevents-eg.workers.dev'
+const WORKER_DELETE_URL = `${WORKER_UPLOAD_URL}/delete`
 
 export async function uploadProductImage(params: {
   file: File
@@ -54,3 +55,31 @@ export function buildProductImagesPayload(productId: string, images: UploadedIma
   }))
 }
 
+type WorkerDeleteResponse = {
+  success?: boolean
+  message?: string
+}
+
+export async function deleteProductImageByStoragePath(storagePath: string): Promise<boolean> {
+  const nextPath = (storagePath || '').trim()
+  if (!nextPath) return true
+
+  const response = await fetch(WORKER_DELETE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ storagePath: nextPath }),
+  })
+
+  let data: WorkerDeleteResponse = {}
+  try {
+    data = (await response.json()) as WorkerDeleteResponse
+  } catch {
+    // ignore non-json responses
+  }
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'تعذر حذف الصورة من التخزين الآن.')
+  }
+
+  return true
+}

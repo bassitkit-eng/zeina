@@ -9,6 +9,35 @@ type UserStorageSnapshot = {
   storagePaths: string[]
 }
 
+function normalizeStoragePath(raw: string): string {
+  let value = (raw || '').trim()
+  if (!value) return ''
+
+  try {
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      const parsed = new URL(value)
+      const objectSegment = '/objects/'
+      if (parsed.pathname.includes(objectSegment)) {
+        value = parsed.pathname.split(objectSegment)[1] || ''
+      } else {
+        value = parsed.pathname.replace(/^\/+/, '')
+      }
+    }
+    value = decodeURIComponent(value)
+  } catch {
+    // Keep best-effort original value.
+  }
+
+  return value.replace(/^\/+/, '').trim()
+}
+
+function extractStoragePathFromUrl(imageUrl: string): string {
+  const value = (imageUrl || '').trim()
+  if (!value) return ''
+  if (!value.startsWith('http://') && !value.startsWith('https://')) return normalizeStoragePath(value)
+  return normalizeStoragePath(value)
+}
+
 function getAuthToken(req: NextRequest): string | null {
   const auth = req.headers.get('authorization') || ''
   if (!auth.toLowerCase().startsWith('bearer ')) return null
@@ -38,20 +67,63 @@ async function collectSnapshot(admin: ReturnType<typeof createSupabaseAdminClien
   let productCoverPaths: string[] = []
 
   if (vendorIds.length > 0) {
-    const { data: products } = await admin.from('products').select('id,cover_storage_path').in('vendor_id', vendorIds)
+    const { data: products } = await admin.from('products').select('id,cover_storage_path,cover_image_url').in('vendor_id', vendorIds)
     productIds = (products || []).map((p) => String(p.id))
-    productCoverPaths = (products || []).map((p) => (p.cover_storage_path ? String(p.cover_storage_path) : '')).filter(Boolean)
+    productCoverPaths = (products || [])
+      .flatMap((p) => [
+        p.cover_storage_path ? String(p.cover_storage_path) : '',
+        p.cover_image_url ? extractStoragePathFromUrl(String(p.cover_image_url)) : '',
+      ])
+      .map((item) => normalizeStoragePath(item))
+      .filter(Boolean)
   }
 
   let productImagePaths: string[] = []
   if (productIds.length > 0) {
-    const { data: productImages } = await admin.from('product_images').select('storage_path').in('product_id', productIds)
-    productImagePaths = (productImages || []).map((p) => (p.storage_path ? String(p.storage_path) : '')).filter(Boolean)
+    const { data: productImages } = await admin.from('product_images').select('storage_path,image_url').in('product_id', productIds)
+    productImagePaths = (productImages || [])
+      .flatMap((p) => [
+        p.storage_path ? String(p.storage_path) : '',
+        p.image_url ? extractStoragePathFromUrl(String(p.image_url)) : '',
+      ])
+      .map((item) => normalizeStoragePath(item))
+      .filter(Boolean)
   }
 
   const storagePaths = Array.from(new Set([...productCoverPaths, ...productImagePaths]))
 
   return { userId, vendorIds, productIds, storagePaths }
+}
+
+async function deleteR2PathsDirectly(storagePaths: string[]) {
+  const workerBase = (process.env.CLOUDFLARE_WORKER_BASE_URL || 'https://zeina-api.zeinaevents-eg.workers.dev').replace(/\/$/, '')
+  const cleanupSecret = (process.env.CLOUDFLARE_CLEANUP_SECRET || process.env.CLEANUP_SECRET || '').trim()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (cleanupSecret) headers['x-cleanup-secret'] = cleanupSecret
+
+  const uniquePaths = Array.from(new Set(storagePaths.map((p) => normalizeStoragePath(p)).filter(Boolean)))
+  if (uniquePaths.length === 0) {
+    return { requested: 0, deleted: 0, failed: 0 }
+  }
+
+  let deleted = 0
+  let failed = 0
+
+  for (const storagePath of uniquePaths.slice(0, 200)) {
+    try {
+      const response = await fetch(`${workerBase}/delete`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ storagePath }),
+      })
+      if (response.ok) deleted += 1
+      else failed += 1
+    } catch {
+      failed += 1
+    }
+  }
+
+  return { requested: uniquePaths.length, deleted, failed }
 }
 
 async function triggerCleanupAndVerifyR2(storagePaths: string[]) {
@@ -79,12 +151,14 @@ async function triggerCleanupAndVerifyR2(storagePaths: string[]) {
 
   const checks = await Promise.all(
     storagePaths.slice(0, 30).map(async (path) => {
-      const url = `${workerBase}/objects/${encodeURIComponent(path)}`
+      const normalized = normalizeStoragePath(path)
+      if (!normalized) return { storagePath: path, deleted: false, status: 0 }
+      const url = `${workerBase}/objects/${encodeURIComponent(normalized)}`
       try {
         const response = await fetch(url, { method: 'GET' })
-        return { storagePath: path, deleted: response.status === 404, status: response.status }
+        return { storagePath: normalized, deleted: response.status === 404, status: response.status }
       } catch {
-        return { storagePath: path, deleted: false, status: 0 }
+        return { storagePath: normalized, deleted: false, status: 0 }
       }
     })
   )
@@ -111,6 +185,7 @@ export async function POST(req: NextRequest) {
 
     const admin = createSupabaseAdminClient()
     const snapshot = await collectSnapshot(admin, userId)
+    const directDelete = await deleteR2PathsDirectly(snapshot.storagePaths)
 
     const { error: deleteError } = await admin.auth.admin.deleteUser(userId)
     if (deleteError) {
@@ -142,6 +217,7 @@ export async function POST(req: NextRequest) {
           products: snapshot.productIds.length,
           storagePaths: snapshot.storagePaths.length,
         },
+        directR2Delete: directDelete,
         supabaseAfterDelete: {
           profileExists: Boolean(profileRow?.id),
           vendorProfilesRemaining: vendorCount || 0,
@@ -156,4 +232,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message }, { status: 500 })
   }
 }
-

@@ -17,6 +17,28 @@ type CleanupResult = {
   failed: number
 }
 
+function normalizeStoragePath(raw: string): string {
+  let value = (raw || '').trim()
+  if (!value) return ''
+
+  try {
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      const parsed = new URL(value)
+      const objectSegment = '/objects/'
+      if (parsed.pathname.includes(objectSegment)) {
+        value = parsed.pathname.split(objectSegment)[1] || ''
+      } else {
+        value = parsed.pathname.replace(/^\/+/, '')
+      }
+    }
+    value = decodeURIComponent(value)
+  } catch {
+    // Keep best-effort original value
+  }
+
+  return value.replace(/^\/+/, '').trim()
+}
+
 function withCorsHeaders(headers?: HeadersInit): Headers {
   const next = new Headers(headers)
   next.set('Access-Control-Allow-Origin', '*')
@@ -70,7 +92,7 @@ async function uploadImage(request: Request, env: Env): Promise<Response> {
 
 async function deleteImage(request: Request, env: Env): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as { storagePath?: string }
-  const storagePath = (body.storagePath || '').trim()
+  const storagePath = normalizeStoragePath(body.storagePath || '')
 
   if (!storagePath) return json({ success: false, message: 'storagePath is required' }, 400)
 
@@ -120,10 +142,17 @@ async function runCleanup(env: Env, limit = 100): Promise<CleanupResult> {
 
   for (const row of rows) {
     try {
-      await env.PRODUCT_IMAGES.delete(row.storage_path)
-      const stillExists = await env.PRODUCT_IMAGES.head(row.storage_path)
+      const normalizedKey = normalizeStoragePath(row.storage_path)
+      if (!normalizedKey) {
+        await markQueueResult(env, row.id, false, 'Empty/invalid storage path')
+        result.failed += 1
+        continue
+      }
+
+      await env.PRODUCT_IMAGES.delete(normalizedKey)
+      const stillExists = await env.PRODUCT_IMAGES.head(normalizedKey)
       if (stillExists) {
-        await markQueueResult(env, row.id, false, 'Object still exists after delete attempt')
+        await markQueueResult(env, row.id, false, `Object still exists after delete attempt: ${normalizedKey}`)
         result.failed += 1
       } else {
         await markQueueResult(env, row.id, true)
