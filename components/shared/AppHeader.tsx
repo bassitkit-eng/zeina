@@ -2,14 +2,15 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/app/contexts/AuthContext'
 import { useFavorites } from '@/app/contexts/FavoritesContext'
 import { CATEGORIES } from '@/lib/catalog'
 
 export function AppHeader() {
   const router = useRouter()
-  const { user, role, signOut } = useAuth()
+  const pathname = usePathname()
+  const { user, signOut } = useAuth()
   const { favorites } = useFavorites()
   const [isClient, setIsClient] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
@@ -40,7 +41,6 @@ export function AppHeader() {
   }
 
   const isAuthenticated = Boolean(user)
-  const isVendor = role === 'vendor' || role === 'admin'
   const displayName =
     (user?.user_metadata?.full_name as string | undefined)?.trim() ||
     (user?.user_metadata?.name as string | undefined)?.trim() ||
@@ -48,39 +48,34 @@ export function AppHeader() {
     'حساب'
   const displayEmail = (user?.email || '').trim()
   const displayInitial = displayName.charAt(0).toUpperCase()
+  const isAddProductPage = pathname === '/add-product'
 
   return (
     <header className="bg-white border-b-2 border-[#E5E5E5] sticky top-0 z-50" dir="rtl">
-      <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
         <Link href="/" className="text-3xl font-bold text-[#C8A97E]">
           زينة
         </Link>
 
-        <nav className="flex gap-8 items-center">
-          <Link href="/" className="text-[#1F1F1F] hover:text-[#C8A97E] transition font-semibold">
-            الرئيسية
-          </Link>
-
+        <nav className="flex-1 flex items-center justify-center gap-8">
           {CATEGORIES.map((category) => (
-            <Link key={category.id} href={`/category/${category.id}`} className="text-[#1F1F1F] hover:text-[#C8A97E] transition font-semibold">
+            <Link key={category.id} href={`/category/${category.id}`} className="text-lg text-[#1F1F1F] hover:text-[#C8A97E] transition font-extrabold whitespace-nowrap">
               {category.name}
             </Link>
           ))}
 
-          <Link
-            href="/add-product"
-            className="h-10 px-4 rounded-xl bg-[#7B57C8] text-white font-bold flex items-center justify-center gap-2 border border-[#6E4DB5] shadow-sm hover:bg-[#6E4DB5] transition"
-          >
-            <span className="text-xl leading-none">+</span>
-            <span>أضف منتجك</span>
-          </Link>
-
-          {isVendor && (
-            <Link href="/vendor-dashboard" className="text-[#1F1F1F] hover:text-[#7B57C8] transition font-semibold">
-              لوحة البائع
+          {!isAddProductPage && (
+            <Link
+              href="/add-product"
+              className="h-10 px-4 rounded-xl bg-[#7B57C8] text-white font-bold flex items-center justify-center gap-2 border border-[#6E4DB5] shadow-sm hover:bg-[#6E4DB5] transition whitespace-nowrap"
+            >
+              <span className="text-xl leading-none">+</span>
+              <span>أضف منتجك</span>
             </Link>
           )}
+        </nav>
 
+        <div className="flex items-center gap-4">
           <Link
             href="/favorites"
             aria-label="المفضلة"
@@ -143,7 +138,7 @@ export function AppHeader() {
               تسجيل الدخول
             </Link>
           )}
-        </nav>
+        </div>
       </div>
 
       {isLogoutConfirmOpen && (
