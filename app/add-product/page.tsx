@@ -7,7 +7,6 @@ import { useAuth } from '@/app/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { CATEGORIES, type CategoryId, type Product, type ProductId, type ProductStatus } from '@/lib/catalog'
 import { getAreasByGovernorate, GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
-import { supabaseClient } from '@/lib/supabase/client'
 import { buildProductImagesPayload, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
 
 type ProductFormState = {
@@ -53,6 +52,14 @@ const initialForm: ProductFormState = {
 
 const STEPS = ['بيانات أساسية', 'التصنيف والموقع', 'معلومات التواصل', 'الصور', 'المراجعة والنشر']
 
+function normalizeArabicDigits(value: string) {
+  return value
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/٬/g, '')
+    .replace(/،/g, '.')
+}
+
 export default function AddProductPage() {
   const router = useRouter()
   const { isLoading: isAuthLoading, user } = useAuth()
@@ -68,9 +75,9 @@ export default function AddProductPage() {
   const [editingProductId, setEditingProductId] = useState<ProductId | null>(null)
   const [editForm, setEditForm] = useState<ProductFormState>(initialForm)
   const [editError, setEditError] = useState('')
-  const [currentUserId, setCurrentUserId] = useState('')
   const [draftUploadProductId, setDraftUploadProductId] = useState(() => crypto.randomUUID())
   const [isUploading, setIsUploading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const areaOptions = useMemo(() => getAreasByGovernorate(form.city), [form.city])
   const editAreaOptions = useMemo(() => getAreasByGovernorate(editForm.city), [editForm.city])
@@ -79,16 +86,6 @@ export default function AddProductPage() {
     if (confirmAction.type === 'delete-image') return 'هل أنت متأكد من حذف هذه الصورة؟ لا يمكن التراجع بعد الحذف.'
     return 'هل أنت متأكد من حذف المنتج؟ سيتم حذف جميع بياناته.'
   }, [confirmAction])
-
-  useEffect(() => {
-    let isMounted = true
-    supabaseClient.auth.getUser().then(({ data }) => {
-      if (isMounted && data.user?.id) setCurrentUserId(data.user.id)
-    })
-    return () => {
-      isMounted = false
-    }
-  }, [])
 
   useEffect(() => {
     if (isAuthLoading) return
@@ -119,6 +116,8 @@ export default function AddProductPage() {
     )
   }
 
+  const currentUserId = user.id
+
   const validateStep = (stepIndex: number) => {
     if (stepIndex === 0) {
       if (!form.name.trim()) {
@@ -128,14 +127,28 @@ export default function AddProductPage() {
     }
 
     if (stepIndex === 1) {
-      if (!form.category || !form.city || !form.location || !form.price) {
-        setError('اختر التصنيف والمحافظة والمنطقة وأدخل السعر.')
+      const cityValue = form.city.trim()
+      const locationValue = form.location.trim() || cityValue
+      const normalizedPrice = normalizeArabicDigits(form.price.trim())
+
+      if (!form.category || !cityValue || !normalizedPrice) {
+        setError('اختر التصنيف والمحافظة وأدخل السعر.')
         return false
       }
-      const parsedPrice = Number(form.price)
+
+      // If location was left empty, default it to the selected governorate.
+      if (!form.location.trim()) {
+        setForm((prev) => ({ ...prev, location: cityValue }))
+      }
+
+      const parsedPrice = Number(normalizedPrice)
       if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
         setError('السعر يجب أن يكون رقمًا صحيحًا أكبر من صفر.')
         return false
+      }
+
+      if (normalizedPrice !== form.price) {
+        setForm((prev) => ({ ...prev, price: normalizedPrice }))
       }
     }
 
@@ -226,15 +239,27 @@ export default function AddProductPage() {
   }
 
   const submitWithStatus = async (status: ProductStatus) => {
+    if (isSubmitting) return
     if (!validateStep(0) || !validateStep(1) || !validateStep(3)) return
+
+    const normalizedPrice = normalizeArabicDigits(form.price.trim())
+    const parsedPrice = Number(normalizedPrice)
+    const resolvedLocation = form.location.trim() || form.city.trim()
+    if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      setError('السعر يجب أن يكون رقمًا صحيحًا أكبر من صفر.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError('')
 
     const payload = {
       name: form.name.trim(),
       category: form.category,
       productType: form.productType.trim() || 'عام',
       city: form.city,
-      location: form.location,
-      price: Number(form.price),
+      location: resolvedLocation,
+      price: parsedPrice,
       contactInfo: {
         phone: form.phone.trim(),
         whatsapp: form.whatsapp.trim(),
@@ -260,6 +285,8 @@ export default function AddProductPage() {
       setActiveTab('mine')
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'تعذر حفظ المنتج الآن.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -617,8 +644,20 @@ export default function AddProductPage() {
                   <p className="text-sm"><span className="font-semibold">عدد الصور:</span> {form.imagePaths.length}</p>
 
                   <div className="flex flex-wrap gap-3 pt-2">
-                    <button onClick={() => void submitWithStatus('draft')} className="h-11 px-5 rounded-lg border border-[#7B57C8] text-[#7B57C8] font-bold">حفظ كمسودة</button>
-                    <button onClick={() => void submitWithStatus('published')} className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90">نشر المنتج</button>
+                    <button
+                      disabled={isSubmitting || isUploading}
+                      onClick={() => void submitWithStatus('draft')}
+                      className="h-11 px-5 rounded-lg border border-[#7B57C8] text-[#7B57C8] font-bold disabled:opacity-60"
+                    >
+                      {isSubmitting ? 'جارٍ الحفظ...' : 'حفظ كمسودة'}
+                    </button>
+                    <button
+                      disabled={isSubmitting || isUploading}
+                      onClick={() => void submitWithStatus('published')}
+                      className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold hover:opacity-90 disabled:opacity-60"
+                    >
+                      {isSubmitting ? 'جارٍ النشر...' : 'نشر المنتج'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -626,9 +665,31 @@ export default function AddProductPage() {
               {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
 
               <div className="mt-6 flex gap-3">
-                {step > 0 && <button onClick={previousStep} className="h-11 px-5 rounded-lg border border-[#9CA3AF] text-[#4B5563] font-bold">السابق</button>}
-                {step < STEPS.length - 1 && <button onClick={nextStep} className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold">التالي</button>}
-                <button onClick={resetForm} className="h-11 px-5 rounded-lg border border-[#D1D5DB] text-[#6B7280] font-bold">تفريغ</button>
+                {step > 0 && (
+                  <button
+                    disabled={isSubmitting}
+                    onClick={previousStep}
+                    className="h-11 px-5 rounded-lg border border-[#9CA3AF] text-[#4B5563] font-bold disabled:opacity-60"
+                  >
+                    السابق
+                  </button>
+                )}
+                {step < STEPS.length - 1 && (
+                  <button
+                    disabled={isSubmitting}
+                    onClick={nextStep}
+                    className="h-11 px-5 rounded-lg bg-[#7B57C8] text-white font-bold disabled:opacity-60"
+                  >
+                    التالي
+                  </button>
+                )}
+                <button
+                  disabled={isSubmitting}
+                  onClick={resetForm}
+                  className="h-11 px-5 rounded-lg border border-[#D1D5DB] text-[#6B7280] font-bold disabled:opacity-60"
+                >
+                  تفريغ
+                </button>
               </div>
             </div>
           )}

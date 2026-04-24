@@ -75,6 +75,14 @@ function normalizeText(value: string | null | undefined) {
   return (value || '').trim().toLowerCase()
 }
 
+function asError(error: unknown, fallbackMessage: string): Error {
+  if (error instanceof Error) return error
+  if (error && typeof error === 'object' && 'message' in error) {
+    return new Error(String((error as { message?: string }).message || fallbackMessage))
+  }
+  return new Error(fallbackMessage)
+}
+
 function cityKey(governorateId: string, cityName: string) {
   return `${governorateId}::${normalizeText(cityName)}`
 }
@@ -197,7 +205,7 @@ async function fetchProductImages(productIds: string[]) {
     .select('product_id,image_url,storage_path,sort_order,is_primary')
     .in('product_id', productIds)
 
-  if (error) throw error
+  if (error) throw asError(error, 'تعذر قراءة صور المنتجات.')
   return (data || []) as ProductImageRow[]
 }
 
@@ -221,7 +229,7 @@ async function syncVendorContact(
     })
     .eq('id', vendorProfileId)
 
-  if (error) throw error
+  if (error) throw asError(error, 'تعذر تحديث بيانات التواصل الخاصة بالبائع.')
 }
 
 export function ProductsProvider({ children }: { children: React.ReactNode }) {
@@ -231,6 +239,13 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const [lookupMaps, setLookupMaps] = useState<LookupMaps | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
+  const resolveCurrentUserId = async () => {
+    if (userId) return userId
+    const { data, error } = await supabaseClient.auth.getUser()
+    if (error) throw asError(error, 'تعذر التحقق من المستخدم الحالي.')
+    return data.user?.id || null
+  }
+
   const getOrCreateVendorProfileId = async (currentUserId: string) => {
     const { data: existing, error: existingError } = await supabaseClient
       .from('vendor_profiles')
@@ -238,7 +253,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       .eq('user_id', currentUserId)
       .maybeSingle()
 
-    if (existingError) throw existingError
+    if (existingError) throw asError(existingError, 'تعذر قراءة بروفايل البائع.')
     if (existing?.id) return existing.id as string
 
     const { data: created, error: createError } = await supabaseClient
@@ -249,17 +264,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     if (createError) {
       // Handles race-condition: another request created the row first.
-      if (createError.code === '23505') {
+      if (createError.code === '23505' || createError.status === 409) {
         const { data: afterConflict, error: afterConflictError } = await supabaseClient
           .from('vendor_profiles')
           .select('id')
           .eq('user_id', currentUserId)
           .single()
 
-        if (afterConflictError) throw afterConflictError
+        if (afterConflictError) throw asError(afterConflictError, 'تعذر قراءة بروفايل البائع بعد التعارض.')
         return afterConflict.id as string
       }
-      throw createError
+      throw asError(createError, 'تعذر إنشاء بروفايل البائع.')
     }
     return created.id as string
   }
@@ -271,7 +286,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       .eq('status', 'published')
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) throw asError(error, 'تعذر قراءة المنتجات المنشورة.')
 
     const productRows = (data || []) as ProductRow[]
     const images = await fetchProductImages(productRows.map((row) => row.id))
@@ -292,7 +307,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       .eq('vendor_id', vendorProfileId)
       .order('created_at', { ascending: false })
 
-    if (error) throw error
+    if (error) throw asError(error, 'تعذر قراءة منتجات البائع.')
 
     const productRows = (data || []) as ProductRow[]
     const images = await fetchProductImages(productRows.map((row) => row.id))
@@ -340,7 +355,8 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const addProduct = async (input: ProductFormInput) => {
-    if (!userId) throw new Error('You must be logged in to add products.')
+    const currentUserId = await resolveCurrentUserId()
+    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا لإضافة منتج.')
 
     const lookup = lookupMaps || (await fetchLookupMaps())
     if (!lookupMaps) setLookupMaps(lookup)
@@ -352,7 +368,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     const governorateId = lookup.governorateByName.get(normalizeText(input.city)) || null
     const cityId = governorateId ? lookup.cityByGovernorateAndName.get(cityKey(governorateId, input.location)) || null : null
-    const vendorProfileId = await getOrCreateVendorProfileId(userId)
+    const vendorProfileId = await getOrCreateVendorProfileId(currentUserId)
     await syncVendorContact(vendorProfileId, input, governorateId, cityId)
 
     const coverImageUrl = input.imagePaths[0] || null
@@ -376,7 +392,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       .select('id')
       .single()
 
-    if (insertError) throw insertError
+    if (insertError) throw asError(insertError, 'تعذر حفظ بيانات المنتج في قاعدة البيانات.')
 
     const productId = insertedProduct.id as string
 
@@ -390,15 +406,16 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     if (imagesPayload.length > 0) {
       const { error: imagesError } = await supabaseClient.from('product_images').insert(imagesPayload)
-      if (imagesError) throw imagesError
+      if (imagesError) throw asError(imagesError, 'تعذر حفظ صور المنتج في قاعدة البيانات.')
     }
 
-    await refreshProducts(userId)
+    void refreshProducts(currentUserId)
     return productId
   }
 
   const updateProduct = async (id: ProductId, input: ProductFormInput) => {
-    if (!userId) throw new Error('You must be logged in.')
+    const currentUserId = await resolveCurrentUserId()
+    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
 
     const lookup = lookupMaps || (await fetchLookupMaps())
     if (!lookupMaps) setLookupMaps(lookup)
@@ -410,7 +427,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     const governorateId = lookup.governorateByName.get(normalizeText(input.city)) || null
     const cityId = governorateId ? lookup.cityByGovernorateAndName.get(cityKey(governorateId, input.location)) || null : null
-    const vendorProfileId = await getOrCreateVendorProfileId(userId)
+    const vendorProfileId = await getOrCreateVendorProfileId(currentUserId)
     await syncVendorContact(vendorProfileId, input, governorateId, cityId)
 
     const { error: updateError } = await supabaseClient
@@ -429,12 +446,12 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       })
       .eq('id', String(id))
 
-    if (updateError) throw updateError
+    if (updateError) throw asError(updateError, 'تعذر تحديث المنتج.')
 
     const productId = String(id)
 
     const { error: deleteImagesError } = await supabaseClient.from('product_images').delete().eq('product_id', productId)
-    if (deleteImagesError) throw deleteImagesError
+    if (deleteImagesError) throw asError(deleteImagesError, 'تعذر تحديث صور المنتج.')
 
     const imagesPayload = input.imagePaths.map((imageUrl, index) => ({
       product_id: productId,
@@ -446,33 +463,35 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     if (imagesPayload.length > 0) {
       const { error: imagesError } = await supabaseClient.from('product_images').insert(imagesPayload)
-      if (imagesError) throw imagesError
+      if (imagesError) throw asError(imagesError, 'تعذر حفظ صور المنتج.')
     }
 
-    await refreshProducts(userId)
+    void refreshProducts(currentUserId)
   }
 
   const updateProductStatus = async (id: ProductId, status: ProductStatus) => {
-    if (!userId) throw new Error('You must be logged in.')
+    const currentUserId = await resolveCurrentUserId()
+    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
 
     const { error } = await supabaseClient.from('products').update({ status }).eq('id', String(id))
-    if (error) throw error
+    if (error) throw asError(error, 'تعذر تحديث حالة المنتج.')
 
-    await refreshProducts(userId)
+    void refreshProducts(currentUserId)
   }
 
   const deleteProduct = async (id: ProductId) => {
-    if (!userId) throw new Error('You must be logged in.')
+    const currentUserId = await resolveCurrentUserId()
+    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
 
     const productId = String(id)
 
     const { error: deleteImagesError } = await supabaseClient.from('product_images').delete().eq('product_id', productId)
-    if (deleteImagesError) throw deleteImagesError
+    if (deleteImagesError) throw asError(deleteImagesError, 'تعذر حذف صور المنتج.')
 
     const { error: deleteProductError } = await supabaseClient.from('products').delete().eq('id', productId)
-    if (deleteProductError) throw deleteProductError
+    if (deleteProductError) throw asError(deleteProductError, 'تعذر حذف المنتج.')
 
-    await refreshProducts(userId)
+    void refreshProducts(currentUserId)
   }
 
   const allProducts = useMemo(() => [...ALL_PRODUCTS, ...publishedProducts], [publishedProducts])
