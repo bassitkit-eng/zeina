@@ -1,6 +1,6 @@
-'use client'
+﻿'use client'
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ALL_PRODUCTS, type CategoryId, type Product, type ProductContactInfo, type ProductId, type ProductStatus } from '@/lib/catalog'
 import { supabaseClient } from '@/lib/supabase/client'
 import { deleteProductImageByStoragePath } from '@/lib/services/productImageUpload'
@@ -72,8 +72,8 @@ const baseProductsByCategory: Record<CategoryId, Product[]> = {
   cakes: ALL_PRODUCTS.filter((p) => p.category === 'cakes'),
 }
 
-const DB_TIMEOUT_MS = 12000
-const DB_RETRY_DELAY_MS = 500
+const DB_TIMEOUT_MS = 20000
+const DB_RETRY_DELAY_MS = 1000
 
 function normalizeText(value: string | null | undefined) {
   return (value || '').trim().toLowerCase()
@@ -125,8 +125,12 @@ async function runDbCall<T>(operation: () => Promise<T>, fallbackMessage: string
   } catch (error) {
     if (!isRetryableError(error)) throw asError(error, fallbackMessage)
     await delay(DB_RETRY_DELAY_MS)
-    return await run().catch((retryError) => {
-      throw asError(retryError, fallbackMessage)
+    return await run().catch(async (retryError) => {
+      if (!isRetryableError(retryError)) throw asError(retryError, fallbackMessage)
+      await delay(DB_RETRY_DELAY_MS)
+      return await run().catch((finalError) => {
+        throw asError(finalError, fallbackMessage)
+      })
     })
   }
 }
@@ -161,13 +165,16 @@ function matchAppCategory(category: CategoryRow): CategoryId | null {
 }
 
 async function fetchLookupMaps(): Promise<LookupMaps> {
-  const [categoriesResult, governoratesResult, citiesResult] = await runDbCall(
-    () =>
-      Promise.all([
-        supabaseClient.from('categories').select('id,name,slug').eq('is_active', true),
-        supabaseClient.from('governorates').select('id,name_ar,name_en'),
-        supabaseClient.from('cities').select('id,governorate_id,name_ar,name_en'),
-      ]),
+  const categoriesResult = await runDbCall(
+    () => supabaseClient.from('categories').select('id,name,slug').eq('is_active', true),
+    'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
+  )
+  const governoratesResult = await runDbCall(
+    () => supabaseClient.from('governorates').select('id,name_ar,name_en'),
+    'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
+  )
+  const citiesResult = await runDbCall(
+    () => supabaseClient.from('cities').select('id,governorate_id,name_ar,name_en'),
     'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
   )
 
@@ -270,10 +277,10 @@ async function fetchProductImages(productIds: string[]) {
         .from('product_images')
         .select('product_id,image_url,storage_path,sort_order,is_primary')
         .in('product_id', productIds),
-    'تعذر قراءة صور المنتجات.'
+    'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
   )
 
-  if (error) throw asError(error, 'تعذر قراءة صور المنتجات.')
+  if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
   return (data || []) as ProductImageRow[]
 }
 
@@ -298,10 +305,10 @@ async function syncVendorContact(
           address_text: input.location || null,
         })
         .eq('id', vendorProfileId),
-    'تعذر تحديث بيانات تواصل البائع.'
+    'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
   )
 
-  if (error) throw asError(error, 'تعذر تحديث بيانات التواصل الخاصة بالبائع.')
+  if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 }
 
 export function ProductsProvider({ children }: { children: React.ReactNode }) {
@@ -310,11 +317,30 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   const [publishedProducts, setPublishedProducts] = useState<Product[]>([])
   const [lookupMaps, setLookupMaps] = useState<LookupMaps | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const lookupMapsPromiseRef = useRef<Promise<LookupMaps> | null>(null)
+  const refreshInFlightRef = useRef<Promise<void> | null>(null)
+
+  const getLookupMaps = async () => {
+    if (lookupMaps) return lookupMaps
+    if (lookupMapsPromiseRef.current) return lookupMapsPromiseRef.current
+
+    const pendingLookup = fetchLookupMaps()
+      .then((result) => {
+        setLookupMaps(result)
+        return result
+      })
+      .finally(() => {
+        lookupMapsPromiseRef.current = null
+      })
+
+    lookupMapsPromiseRef.current = pendingLookup
+    return pendingLookup
+  }
 
   const resolveCurrentUserId = async () => {
     if (userId) return userId
-    const { data, error } = await runDbCall(() => supabaseClient.auth.getUser(), 'تعذر التحقق من المستخدم الحالي.')
-    if (error) throw asError(error, 'تعذر التحقق من المستخدم الحالي.')
+    const { data, error } = await runDbCall(() => supabaseClient.auth.getUser(), 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
+    if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
     return data.user?.id || null
   }
 
@@ -329,7 +355,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
             .select('id')
             .eq('user_id', currentUserId)
             .maybeSingle(),
-        'تعذر قراءة بروفايل البائع.'
+        'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
       )
 
       if (error) {
@@ -349,7 +375,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
           .insert({ user_id: currentUserId, business_name: 'Zeina Vendor' })
           .select('id')
           .single(),
-      'تعذر إنشاء بروفايل البائع.'
+      'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
     )
 
     if (!createError && created?.id) {
@@ -365,16 +391,16 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
             .select('id')
             .eq('user_id', currentUserId)
             .single(),
-        'تعذر قراءة بروفايل البائع بعد التعارض.'
+        'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
       )
 
-      if (afterConflictError) throw asError(afterConflictError, 'تعذر قراءة بروفايل البائع بعد التعارض.')
+      if (afterConflictError) throw asError(afterConflictError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
       if (afterConflict?.id) return afterConflict.id as string
     }
 
-    if (createError) throw asError(createError, 'تعذر إنشاء بروفايل البائع.')
-    if (existingError) throw asError(existingError, 'تعذر قراءة بروفايل البائع.')
-    throw new Error('تعذر إنشاء أو قراءة بروفايل البائع.')
+    if (createError) throw asError(createError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
+    if (existingError) throw asError(existingError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
+    throw new Error('تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
   }
 
   const loadProductStoragePaths = async (productId: string) => {
@@ -413,10 +439,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
           .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
           .eq('status', 'published')
           .order('created_at', { ascending: false }),
-      'تعذر قراءة المنتجات المنشورة.'
+      'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
     )
 
-    if (error) throw asError(error, 'تعذر قراءة المنتجات المنشورة.')
+    if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const productRows = (data || []) as ProductRow[]
     const images = await fetchProductImages(productRows.map((row) => row.id))
@@ -438,10 +464,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
           .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
           .eq('vendor_id', vendorProfileId)
           .order('created_at', { ascending: false }),
-      'تعذر قراءة منتجات البائع.'
+      'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
     )
 
-    if (error) throw asError(error, 'تعذر قراءة منتجات البائع.')
+    if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const productRows = (data || []) as ProductRow[]
     const images = await fetchProductImages(productRows.map((row) => row.id))
@@ -449,17 +475,24 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }
 
   const refreshProducts = async (currentUserId: string | null) => {
-    setIsLoading(true)
-    try {
-      const lookup = lookupMaps || (await fetchLookupMaps())
-      if (!lookupMaps) setLookupMaps(lookup)
+    if (refreshInFlightRef.current) return refreshInFlightRef.current
 
-      await Promise.all([fetchPublished(lookup), fetchVendorProducts(lookup, currentUserId)])
-    } catch (error) {
-      console.error('Failed to refresh products', error)
-    } finally {
-      setIsLoading(false)
-    }
+    setIsLoading(true)
+    const task = (async () => {
+      try {
+        const lookup = await getLookupMaps()
+        await Promise.all([fetchPublished(lookup), fetchVendorProducts(lookup, currentUserId)])
+      } catch (error) {
+        console.error('Failed to refresh products', error)
+      } finally {
+        setIsLoading(false)
+      }
+    })()
+
+    refreshInFlightRef.current = task
+    await task.finally(() => {
+      refreshInFlightRef.current = null
+    })
   }
 
   useEffect(() => {
@@ -490,10 +523,9 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const addProduct = async (input: ProductFormInput) => {
     const currentUserId = await resolveCurrentUserId()
-    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا لإضافة منتج.')
+    if (!currentUserId) throw new Error('تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
-    const lookup = lookupMaps || (await fetchLookupMaps())
-    if (!lookupMaps) setLookupMaps(lookup)
+    const lookup = await getLookupMaps()
 
     const categoryDbId = lookup.dbCategoryByApp[input.category]
     if (!categoryDbId) {
@@ -526,10 +558,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
           })
           .select('id')
           .single(),
-      'تعذر حفظ بيانات المنتج في قاعدة البيانات.'
+      'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
     )
 
-    if (insertError) throw asError(insertError, 'تعذر حفظ بيانات المنتج في قاعدة البيانات.')
+    if (insertError) throw asError(insertError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const productId = insertedProduct.id as string
 
@@ -549,9 +581,9 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     if (imagesPayload.length > 0) {
       const { error: imagesError } = await runDbCall(
         () => supabaseClient.from('product_images').insert(imagesPayload),
-        'تعذر حفظ صور المنتج في قاعدة البيانات.'
+        'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
       )
-      if (imagesError) throw asError(imagesError, 'تعذر حفظ صور المنتج في قاعدة البيانات.')
+      if (imagesError) throw asError(imagesError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
     }
 
     void refreshProducts(currentUserId)
@@ -560,10 +592,9 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const updateProduct = async (id: ProductId, input: ProductFormInput) => {
     const currentUserId = await resolveCurrentUserId()
-    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
+    if (!currentUserId) throw new Error('تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
-    const lookup = lookupMaps || (await fetchLookupMaps())
-    if (!lookupMaps) setLookupMaps(lookup)
+    const lookup = await getLookupMaps()
 
     const categoryDbId = lookup.dbCategoryByApp[input.category]
     if (!categoryDbId) {
@@ -599,10 +630,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       })
       .eq('id', String(id))
 
-    if (updateError) throw asError(updateError, 'تعذر تحديث المنتج.')
+    if (updateError) throw asError(updateError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const { error: deleteImagesError } = await supabaseClient.from('product_images').delete().eq('product_id', productId)
-    if (deleteImagesError) throw asError(deleteImagesError, 'تعذر تحديث صور المنتج.')
+    if (deleteImagesError) throw asError(deleteImagesError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const imagesPayload = input.imagePaths.map((imageUrl, index) => ({
       product_id: productId,
@@ -614,7 +645,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     if (imagesPayload.length > 0) {
       const { error: imagesError } = await supabaseClient.from('product_images').insert(imagesPayload)
-      if (imagesError) throw asError(imagesError, 'تعذر حفظ صور المنتج.')
+      if (imagesError) throw asError(imagesError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
     }
 
     const nextStoragePaths = uniqueStoragePaths(input.imageStoragePaths || [])
@@ -626,17 +657,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const updateProductStatus = async (id: ProductId, status: ProductStatus) => {
     const currentUserId = await resolveCurrentUserId()
-    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
+    if (!currentUserId) throw new Error('تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const { error } = await supabaseClient.from('products').update({ status }).eq('id', String(id))
-    if (error) throw asError(error, 'تعذر تحديث حالة المنتج.')
+    if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     void refreshProducts(currentUserId)
   }
 
   const deleteProduct = async (id: ProductId) => {
     const currentUserId = await resolveCurrentUserId()
-    if (!currentUserId) throw new Error('برجاء تسجيل الدخول أولًا.')
+    if (!currentUserId) throw new Error('تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     const productId = String(id)
     let storagePaths: string[] = []
@@ -655,7 +686,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { error: deleteProductError } = await supabaseClient.from('products').delete().eq('id', productId)
-    if (deleteProductError) throw asError(deleteProductError, 'تعذر حذف المنتج.')
+    if (deleteProductError) throw asError(deleteProductError, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
 
     void deleteR2PathsBestEffort(storagePaths)
     void refreshProducts(currentUserId)
@@ -697,3 +728,5 @@ export function useProducts() {
   }
   return context
 }
+
+
