@@ -61,10 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange(async (_event, nextSession) => {
+    } = supabaseClient.auth.onAuthStateChange(async (event, nextSession) => {
       if (!isMounted) return
       setSession(nextSession ?? null)
       setUser(nextSession?.user ?? null)
+      if (event === 'TOKEN_REFRESHED') {
+        if (isMounted) setIsLoading(false)
+        return
+      }
       if (nextSession?.user?.id) {
         const nextRole = await fetchCurrentRole(nextSession.user.id)
         if (isMounted) setRole(nextRole)

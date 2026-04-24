@@ -20,12 +20,22 @@ type ProductFormInput = {
 }
 
 type CategoryRow = { id: string; name: string | null; slug: string | null }
+type SubcategoryRow = { id: string; category_id: string | null; name: string | null }
 type GovernorateRow = { id: string; name_ar: string | null; name_en: string | null }
 type CityRow = { id: string; governorate_id: string | null; name_ar: string | null; name_en: string | null }
+type VendorContactRow = {
+  id: string
+  phone: string | null
+  whatsapp: string | null
+  instagram: string | null
+  facebook: string | null
+  tiktok: string | null
+}
 type ProductRow = {
   id: string
   vendor_id: string
   category_id: string | null
+  subcategory_id: string | null
   title: string | null
   description: string | null
   price: number | null
@@ -47,6 +57,8 @@ type ProductImageRow = {
 type LookupMaps = {
   dbCategoryByApp: Partial<Record<CategoryId, string>>
   appCategoryByDb: Map<string, CategoryId>
+  subcategoryByCategoryAndName: Map<string, string>
+  subcategoryNameById: Map<string, string>
   governorateByName: Map<string, string>
   governorateNameById: Map<string, string>
   cityByGovernorateAndName: Map<string, string>
@@ -139,6 +151,10 @@ function cityKey(governorateId: string, cityName: string) {
   return `${governorateId}::${normalizeText(cityName)}`
 }
 
+function subcategoryKey(categoryId: string, subcategoryName: string) {
+  return `${categoryId}::${normalizeText(subcategoryName)}`
+}
+
 function uniqueStoragePaths(paths: Array<string | null | undefined>) {
   return Array.from(new Set(paths.map((item) => (item || '').trim()).filter(Boolean)))
 }
@@ -169,6 +185,10 @@ async function fetchLookupMaps(): Promise<LookupMaps> {
     () => supabaseClient.from('categories').select('id,name,slug').eq('is_active', true),
     'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
   )
+  const subcategoriesResult = await runDbCall(
+    () => supabaseClient.from('subcategories').select('id,category_id,name').eq('is_active', true),
+    'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
+  )
   const governoratesResult = await runDbCall(
     () => supabaseClient.from('governorates').select('id,name_ar,name_en'),
     'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
@@ -179,10 +199,12 @@ async function fetchLookupMaps(): Promise<LookupMaps> {
   )
 
   if (categoriesResult.error) throw asError(categoriesResult.error, 'تعذر قراءة التصنيفات.')
+  if (subcategoriesResult.error) throw asError(subcategoriesResult.error, 'تعذر قراءة التصنيفات الفرعية.')
   if (governoratesResult.error) throw asError(governoratesResult.error, 'تعذر قراءة المحافظات.')
   if (citiesResult.error) throw asError(citiesResult.error, 'تعذر قراءة المدن.')
 
   const categories = categoriesResult.data || []
+  const subcategories = subcategoriesResult.data || []
   const governorates = governoratesResult.data || []
   const cities = citiesResult.data || []
 
@@ -194,6 +216,16 @@ async function fetchLookupMaps(): Promise<LookupMaps> {
     if (!appCategory) return
     dbCategoryByApp[appCategory] = (category as CategoryRow).id
     appCategoryByDb.set((category as CategoryRow).id, appCategory)
+  })
+
+  const subcategoryByCategoryAndName = new Map<string, string>()
+  const subcategoryNameById = new Map<string, string>()
+
+  ;(subcategories || []).forEach((row) => {
+    const item = row as SubcategoryRow
+    if (!item.id || !item.category_id || !item.name) return
+    subcategoryByCategoryAndName.set(subcategoryKey(item.category_id, item.name), item.id)
+    subcategoryNameById.set(item.id, item.name)
   })
 
   const governorateByName = new Map<string, string>()
@@ -220,6 +252,8 @@ async function fetchLookupMaps(): Promise<LookupMaps> {
   return {
     dbCategoryByApp,
     appCategoryByDb,
+    subcategoryByCategoryAndName,
+    subcategoryNameById,
     governorateByName,
     governorateNameById,
     cityByGovernorateAndName,
@@ -227,7 +261,12 @@ async function fetchLookupMaps(): Promise<LookupMaps> {
   }
 }
 
-function mapRowsToProducts(rows: ProductRow[], images: ProductImageRow[], lookup: LookupMaps): Product[] {
+function mapRowsToProducts(
+  rows: ProductRow[],
+  images: ProductImageRow[],
+  vendorContacts: Map<string, ProductContactInfo>,
+  lookup: LookupMaps
+): Product[] {
   const groupedImages = new Map<string, ProductImageRow[]>()
 
   images.forEach((img) => {
@@ -249,6 +288,8 @@ function mapRowsToProducts(rows: ProductRow[], images: ProductImageRow[], lookup
 
     const governorateName = row.governorate_id ? lookup.governorateNameById.get(row.governorate_id) || '' : ''
     const cityName = row.city_id ? lookup.cityNameById.get(row.city_id) || '' : ''
+    const subcategoryName = row.subcategory_id ? lookup.subcategoryNameById.get(row.subcategory_id) || '' : ''
+    const contactInfo = vendorContacts.get(row.vendor_id) || {}
 
     return {
       id: row.id,
@@ -257,13 +298,13 @@ function mapRowsToProducts(rows: ProductRow[], images: ProductImageRow[], lookup
       city: governorateName || 'Unknown',
       location: cityName || row.address_text || 'Unknown',
       category: appCategory,
-      productType: 'General',
+      productType: subcategoryName || 'عام',
       imagePath,
       imagePaths: productImages.length > 0 ? productImages : [imagePath],
       imageStoragePaths: storagePaths.length > 0 ? storagePaths : row.cover_storage_path ? [row.cover_storage_path] : [],
       status: row.status || 'draft',
       description: row.description || '',
-      contactInfo: {},
+      contactInfo,
     }
   })
 }
@@ -282,6 +323,34 @@ async function fetchProductImages(productIds: string[]) {
 
   if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
   return (data || []) as ProductImageRow[]
+}
+
+async function fetchVendorContacts(vendorIds: string[]) {
+  if (vendorIds.length === 0) return new Map<string, ProductContactInfo>()
+
+  const { data, error } = await runDbCall(
+    () =>
+      supabaseClient
+        .from('vendor_profiles')
+        .select('id,phone,whatsapp,instagram,facebook,tiktok')
+        .in('id', Array.from(new Set(vendorIds))),
+    'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
+  )
+
+  if (error) throw asError(error, 'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.')
+
+  const output = new Map<string, ProductContactInfo>()
+  ;((data || []) as VendorContactRow[]).forEach((row) => {
+    output.set(row.id, {
+      phone: row.phone || undefined,
+      whatsapp: row.whatsapp || undefined,
+      instagram: row.instagram || undefined,
+      facebook: row.facebook || undefined,
+      tiktok: row.tiktok || undefined,
+    })
+  })
+
+  return output
 }
 
 async function syncVendorContact(
@@ -436,7 +505,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       () =>
         supabaseClient
           .from('products')
-          .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
+          .select('id,vendor_id,category_id,subcategory_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
           .eq('status', 'published')
           .order('created_at', { ascending: false }),
       'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
@@ -446,7 +515,8 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     const productRows = (data || []) as ProductRow[]
     const images = await fetchProductImages(productRows.map((row) => row.id))
-    setPublishedProducts(mapRowsToProducts(productRows, images, lookup))
+    const contacts = await fetchVendorContacts(productRows.map((row) => row.vendor_id))
+    setPublishedProducts(mapRowsToProducts(productRows, images, contacts, lookup))
   }
 
   const fetchVendorProducts = async (lookup: LookupMaps, currentUserId: string | null) => {
@@ -461,7 +531,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       () =>
         supabaseClient
           .from('products')
-          .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
+          .select('id,vendor_id,category_id,subcategory_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
           .eq('vendor_id', vendorProfileId)
           .order('created_at', { ascending: false }),
       'تعذر الاتصال بقاعدة البيانات. حاول مرة أخرى.'
@@ -471,7 +541,8 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     const productRows = (data || []) as ProductRow[]
     const images = await fetchProductImages(productRows.map((row) => row.id))
-    setCustomProducts(mapRowsToProducts(productRows, images, lookup))
+    const contacts = await fetchVendorContacts(productRows.map((row) => row.vendor_id))
+    setCustomProducts(mapRowsToProducts(productRows, images, contacts, lookup))
   }
 
   const refreshProducts = async (currentUserId: string | null) => {
@@ -507,10 +578,11 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+    } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return
       const currentUserId = session?.user?.id || null
       setUserId(currentUserId)
+      if (event === 'TOKEN_REFRESHED') return
       await refreshProducts(currentUserId)
     })
 
@@ -531,6 +603,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     if (!categoryDbId) {
       throw new Error('Category mapping was not found in database. Check categories table.')
     }
+    const subcategoryDbId =
+      input.productType && input.productType !== 'عام'
+        ? lookup.subcategoryByCategoryAndName.get(subcategoryKey(categoryDbId, input.productType)) || null
+        : null
 
     const governorateId = lookup.governorateByName.get(normalizeText(input.city)) || null
     const cityId = governorateId ? lookup.cityByGovernorateAndName.get(cityKey(governorateId, input.location)) || null : null
@@ -546,6 +622,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
           .insert({
             vendor_id: vendorProfileId,
             category_id: categoryDbId,
+            subcategory_id: subcategoryDbId,
             title: input.name,
             description: input.description || null,
             price: input.price,
@@ -600,6 +677,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     if (!categoryDbId) {
       throw new Error('Category mapping was not found in database. Check categories table.')
     }
+    const subcategoryDbId =
+      input.productType && input.productType !== 'عام'
+        ? lookup.subcategoryByCategoryAndName.get(subcategoryKey(categoryDbId, input.productType)) || null
+        : null
 
     const governorateId = lookup.governorateByName.get(normalizeText(input.city)) || null
     const cityId = governorateId ? lookup.cityByGovernorateAndName.get(cityKey(governorateId, input.location)) || null : null
@@ -618,6 +699,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
       .from('products')
       .update({
         category_id: categoryDbId,
+        subcategory_id: subcategoryDbId,
         title: input.name,
         description: input.description || null,
         price: input.price,

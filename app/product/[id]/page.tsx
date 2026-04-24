@@ -7,6 +7,7 @@ import { useProducts } from '@/app/contexts/ProductsContext'
 import { AppHeader } from '@/components/shared/AppHeader'
 import { FavoriteIconButton } from '@/components/shared/FavoriteIconButton'
 import { CATEGORY_NAMES } from '@/lib/catalog'
+import { Instagram, MessageCircle, Phone, Facebook, Music2 } from 'lucide-react'
 
 export default function ProductPage() {
   const { allProducts } = useProducts()
@@ -30,6 +31,14 @@ export default function ProductPage() {
     )
   }
 
+  const phone = product.contactInfo?.phone?.trim() || ''
+  const whatsapp = product.contactInfo?.whatsapp?.trim() || ''
+  const instagram = product.contactInfo?.instagram?.trim() || ''
+  const facebook = product.contactInfo?.facebook?.trim() || ''
+  const tiktok = product.contactInfo?.tiktok?.trim() || ''
+  const hasContact = Boolean(phone || whatsapp || instagram || facebook || tiktok)
+  const subcategoryLabel = product.productType && product.productType !== 'عام' ? product.productType : '-'
+
   return (
     <main className="min-h-screen bg-[#F3F4F6]">
       <AppHeader />
@@ -50,21 +59,47 @@ export default function ProductPage() {
               <div className="mb-8">
                 <h2 className="text-3xl font-bold text-[#374151] mb-2">تواصل مع البائع</h2>
                 <p className="text-[#6B7280] mb-4">جميع وسائل التواصل التالية تخص البائع لهذا المنتج.</p>
-
-                <button className="w-full h-16 rounded-xl text-white text-2xl font-bold mb-3 bg-gradient-to-r from-[#29C75F] to-[#11998E]">
-                  تواصل عبر واتساب
-                </button>
-                <button className="w-full h-14 rounded-xl text-white text-xl font-bold bg-gradient-to-r from-[#E1306C] to-[#C13584]">
-                  تابع البائع على إنستجرام
-                </button>
+                {!hasContact && <p className="text-[#6B7280]">لا توجد وسائل تواصل مضافة لهذا المنتج.</p>}
+                <div className="space-y-3">
+                  {phone && (
+                    <a href={`tel:${phone}`} className="w-full h-14 rounded-xl text-white text-lg font-bold bg-[#111827] flex items-center justify-center gap-2">
+                      <Phone size={20} />
+                      {phone}
+                    </a>
+                  )}
+                  {whatsapp && (
+                    <a href={`https://wa.me/${whatsapp.replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer" className="w-full h-14 rounded-xl text-white text-lg font-bold bg-gradient-to-r from-[#29C75F] to-[#11998E] flex items-center justify-center gap-2">
+                      <MessageCircle size={20} />
+                      تواصل عبر واتساب
+                    </a>
+                  )}
+                  {instagram && (
+                    <a href={instagram.startsWith('http') ? instagram : `https://instagram.com/${instagram.replace(/^@/, '')}`} target="_blank" rel="noreferrer" className="w-full h-14 rounded-xl text-white text-lg font-bold bg-gradient-to-r from-[#E1306C] to-[#C13584] flex items-center justify-center gap-2">
+                      <Instagram size={20} />
+                      تابع على إنستجرام
+                    </a>
+                  )}
+                  {facebook && (
+                    <a href={facebook.startsWith('http') ? facebook : `https://${facebook}`} target="_blank" rel="noreferrer" className="w-full h-14 rounded-xl text-white text-lg font-bold bg-[#1877F2] flex items-center justify-center gap-2">
+                      <Facebook size={20} />
+                      تابع على فيسبوك
+                    </a>
+                  )}
+                  {tiktok && (
+                    <a href={tiktok.startsWith('http') ? tiktok : `https://www.tiktok.com/@${tiktok.replace(/^@/, '')}`} target="_blank" rel="noreferrer" className="w-full h-14 rounded-xl text-white text-lg font-bold bg-[#111827] flex items-center justify-center gap-2">
+                      <Music2 size={20} />
+                      تابع على تيك توك
+                    </a>
+                  )}
+                </div>
               </div>
 
               <div className="border-t border-[#D1D5DB] pt-6">
                 <h3 className="text-3xl font-bold text-[#374151] mb-4">تفاصيل إضافية</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-lg">
-                  <p className="text-[#6B7280]">التصنيف الفرعي: <span className="text-[#374151] font-semibold">{product.name}</span></p>
+                  <p className="text-[#6B7280]">التصنيف الفرعي: <span className="text-[#374151] font-semibold">{subcategoryLabel}</span></p>
                   <p className="text-[#6B7280]">تاريخ الإضافة: <span className="text-[#374151] font-semibold">غير محدد</span></p>
-                  <p className="text-[#6B7280]">النوع: <span className="text-[#374151] font-semibold">{product.productType}</span></p>
+                  <p className="text-[#6B7280]">النوع: <span className="text-[#374151] font-semibold">{subcategoryLabel}</span></p>
                   <p className="text-[#6B7280]">المحافظات المتوفرة: <span className="text-[#374151] font-semibold">{product.city}</span></p>
                   <p className="text-[#6B7280]">المناطق/المدن المتوفرة: <span className="text-[#374151] font-semibold">{product.location}</span></p>
                 </div>

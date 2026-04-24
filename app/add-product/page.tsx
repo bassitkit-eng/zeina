@@ -146,6 +146,19 @@ export default function AddProductPage() {
   }, [])
 
   useEffect(() => {
+    if (formSubcategoryOptions.length === 0) return
+    if (form.productType !== 'عام') return
+    setForm((prev) => ({ ...prev, productType: formSubcategoryOptions[0] }))
+  }, [formSubcategoryOptions, form.productType])
+
+  useEffect(() => {
+    if (!editingProductId) return
+    if (editSubcategoryOptions.length === 0) return
+    if (editForm.productType !== 'عام') return
+    setEditForm((prev) => ({ ...prev, productType: editSubcategoryOptions[0] }))
+  }, [editingProductId, editSubcategoryOptions, editForm.productType])
+
+  useEffect(() => {
     if (!user?.id) return
 
     let isMounted = true
@@ -379,7 +392,7 @@ export default function AddProductPage() {
     const payload = {
       name: form.name.trim() || DEFAULT_PRODUCT_NAME,
       category: form.category,
-      productType: form.productType.trim() || 'عام',
+      productType: (form.productType.trim() === 'عام' && formSubcategoryOptions.length > 0 ? formSubcategoryOptions[0] : form.productType.trim()) || 'عام',
       city: form.city,
       location: resolvedLocation,
       price: parsedPrice,
@@ -498,7 +511,8 @@ export default function AddProductPage() {
       await updateProduct(editingProductId, {
         name: editForm.name.trim() || DEFAULT_PRODUCT_NAME,
         category: editForm.category,
-        productType: editForm.productType.trim() || 'عام',
+        productType:
+          (editForm.productType.trim() === 'عام' && editSubcategoryOptions.length > 0 ? editSubcategoryOptions[0] : editForm.productType.trim()) || 'عام',
         city: editForm.city,
         location: editForm.location,
         price: parsedPrice,
