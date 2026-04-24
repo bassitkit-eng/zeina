@@ -9,6 +9,7 @@ import { CATEGORIES, type CategoryId, type Product, type ProductId, type Product
 import { GOVERNORATE_OPTIONS } from '@/lib/egyptLocations'
 import { buildProductImagesPayload, deleteProductImageByStoragePath, uploadProductImage, type UploadedImageMeta } from '@/lib/services/productImageUpload'
 import { fetchMarketOptions, type MarketOptions } from '@/lib/services/marketOptions'
+import { supabaseClient } from '@/lib/supabase/client'
 
 type ProductFormState = {
   name: string
@@ -33,6 +34,8 @@ type ConfirmAction =
   | { type: 'delete-product'; productId: ProductId }
   | null
 
+type VendorPrefill = Pick<ProductFormState, 'city' | 'location' | 'phone' | 'whatsapp' | 'instagram' | 'facebook' | 'tiktok'>
+
 const initialForm: ProductFormState = {
   name: '',
   category: 'kosha',
@@ -53,6 +56,16 @@ const initialForm: ProductFormState = {
 
 const STEPS = ['بيانات أساسية', 'التصنيف والموقع', 'معلومات التواصل', 'الصور', 'المراجعة والنشر']
 const PUBLISH_TIMEOUT_MS = 30000
+const DEFAULT_PRODUCT_NAME = 'منتج بدون اسم'
+const emptyPrefill: VendorPrefill = {
+  city: '',
+  location: '',
+  phone: '',
+  whatsapp: '',
+  instagram: '',
+  facebook: '',
+  tiktok: '',
+}
 
 function normalizeArabicDigits(value: string) {
   return value
@@ -77,6 +90,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
   })
 }
 
+function hasAtLeastOneContact(formState: Pick<ProductFormState, 'phone' | 'whatsapp' | 'instagram' | 'facebook' | 'tiktok'>) {
+  return [formState.phone, formState.whatsapp, formState.instagram, formState.facebook, formState.tiktok].some((value) => value.trim().length > 0)
+}
+
 export default function AddProductPage() {
   const router = useRouter()
   const { isLoading: isAuthLoading, user } = useAuth()
@@ -96,6 +113,7 @@ export default function AddProductPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [marketOptions, setMarketOptions] = useState<MarketOptions | null>(null)
+  const [vendorPrefill, setVendorPrefill] = useState<VendorPrefill>(emptyPrefill)
 
   const categoryOptions = marketOptions?.categories || CATEGORIES
   const governorateOptions = marketOptions?.governorates || GOVERNORATE_OPTIONS
@@ -127,6 +145,67 @@ export default function AddProductPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!user?.id) return
+
+    let isMounted = true
+    void (async () => {
+      const { data: vendor, error } = await supabaseClient
+        .from('vendor_profiles')
+        .select('phone,whatsapp,instagram,facebook,tiktok,address_text,governorate_id,city_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!isMounted || error || !vendor) return
+
+      let governorateName = ''
+      if (vendor.governorate_id) {
+        const { data } = await supabaseClient
+          .from('governorates')
+          .select('name_ar,name_en')
+          .eq('id', vendor.governorate_id)
+          .maybeSingle()
+        governorateName = (data?.name_ar || data?.name_en || '').trim()
+      }
+
+      let cityName = ''
+      if (vendor.city_id) {
+        const { data } = await supabaseClient
+          .from('cities')
+          .select('name_ar,name_en')
+          .eq('id', vendor.city_id)
+          .maybeSingle()
+        cityName = (data?.name_ar || data?.name_en || '').trim()
+      }
+
+      const defaults: VendorPrefill = {
+        city: governorateName,
+        location: cityName || (vendor.address_text || '').trim(),
+        phone: (vendor.phone || '').trim(),
+        whatsapp: (vendor.whatsapp || '').trim(),
+        instagram: (vendor.instagram || '').trim(),
+        facebook: (vendor.facebook || '').trim(),
+        tiktok: (vendor.tiktok || '').trim(),
+      }
+
+      setVendorPrefill(defaults)
+      setForm((prev) => ({
+        ...prev,
+        city: prev.city || defaults.city,
+        location: prev.location || defaults.location,
+        phone: prev.phone || defaults.phone,
+        whatsapp: prev.whatsapp || defaults.whatsapp,
+        instagram: prev.instagram || defaults.instagram,
+        facebook: prev.facebook || defaults.facebook,
+        tiktok: prev.tiktok || defaults.tiktok,
+      }))
+    })()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?.id])
+
   if (isAuthLoading) {
     return (
       <main className="min-h-screen bg-[#FAF9F7]">
@@ -153,8 +232,8 @@ export default function AddProductPage() {
 
   const validateStep = (stepIndex: number) => {
     if (stepIndex === 0) {
-      if (!form.name.trim()) {
-        setError('أدخل اسم المنتج أولًا.')
+      if (!form.description.trim()) {
+        setError('أدخل وصف المنتج أولًا.')
         return false
       }
     }
@@ -188,6 +267,13 @@ export default function AddProductPage() {
     if (stepIndex === 3) {
       if (form.imagePaths.length === 0) {
         setError('أضف صورة واحدة على الأقل.')
+        return false
+      }
+    }
+
+    if (stepIndex === 2) {
+      if (!hasAtLeastOneContact(form)) {
+        setError('أدخل وسيلة تواصل واحدة على الأقل (هاتف أو واتساب أو إنستجرام أو فيسبوك أو تيك توك).')
         return false
       }
     }
@@ -264,8 +350,12 @@ export default function AddProductPage() {
     setEditError('')
   }
 
-  const resetForm = () => {
-    setForm(initialForm)
+  const resetForm = (prefillOverride?: VendorPrefill) => {
+    const nextPrefill = prefillOverride || vendorPrefill
+    setForm({
+      ...initialForm,
+      ...nextPrefill,
+    })
     setDraftUploadProductId(crypto.randomUUID())
     setError('')
     setStep(0)
@@ -273,7 +363,7 @@ export default function AddProductPage() {
 
   const submitWithStatus = async (status: ProductStatus) => {
     if (isSubmitting) return
-    if (!validateStep(0) || !validateStep(1) || !validateStep(3)) return
+    if (!validateStep(0) || !validateStep(1) || !validateStep(2) || !validateStep(3)) return
 
     const normalizedPrice = normalizeArabicDigits(form.price.trim())
     const parsedPrice = Number(normalizedPrice)
@@ -287,7 +377,7 @@ export default function AddProductPage() {
     setError('')
 
     const payload = {
-      name: form.name.trim(),
+      name: form.name.trim() || DEFAULT_PRODUCT_NAME,
       category: form.category,
       productType: form.productType.trim() || 'عام',
       city: form.city,
@@ -318,7 +408,17 @@ export default function AddProductPage() {
         PUBLISH_TIMEOUT_MS,
         'تأخر الاتصال أثناء النشر. تحقق من الإنترنت ثم أعد المحاولة، أو راجع "منتجاتي" فقد يكون المنتج نُشر بالفعل.'
       )
-      resetForm()
+      const nextPrefill: VendorPrefill = {
+        city: form.city.trim(),
+        location: resolvedLocation,
+        phone: form.phone.trim(),
+        whatsapp: form.whatsapp.trim(),
+        instagram: form.instagram.trim(),
+        facebook: form.facebook.trim(),
+        tiktok: form.tiktok.trim(),
+      }
+      setVendorPrefill(nextPrefill)
+      resetForm(nextPrefill)
       setActiveTab('mine')
     } catch (submitError) {
       console.error('submitWithStatus failed', submitError)
@@ -372,8 +472,8 @@ export default function AddProductPage() {
 
   const saveEditModal = async () => {
     if (!editingProductId) return
-    if (!editForm.name.trim()) {
-      setEditError('أدخل اسم المنتج أولًا.')
+    if (!editForm.description.trim()) {
+      setEditError('أدخل وصف المنتج أولًا.')
       return
     }
     if (!editForm.category || !editForm.city || !editForm.location || !editForm.price) {
@@ -389,10 +489,14 @@ export default function AddProductPage() {
       setEditError('أضف صورة واحدة على الأقل.')
       return
     }
+    if (!hasAtLeastOneContact(editForm)) {
+      setEditError('أدخل وسيلة تواصل واحدة على الأقل (هاتف أو واتساب أو إنستجرام أو فيسبوك أو تيك توك).')
+      return
+    }
 
     try {
       await updateProduct(editingProductId, {
-        name: editForm.name.trim(),
+        name: editForm.name.trim() || DEFAULT_PRODUCT_NAME,
         category: editForm.category,
         productType: editForm.productType.trim() || 'عام',
         city: editForm.city,
@@ -501,7 +605,9 @@ export default function AddProductPage() {
               {step === 0 && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block mb-2 text-sm font-extrabold text-black">اسم المنتج</label>
+                    <label className="block mb-2 text-sm font-extrabold text-black">
+                      اسم المنتج <span className="text-[12px] font-medium text-[#9CA3AF]">(اختياري)</span>
+                    </label>
                     <input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -839,7 +945,9 @@ export default function AddProductPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
-                <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">اسم المنتج</label>
+                <label className="block mb-2 text-sm font-semibold text-[#1F1F1F]">
+                  اسم المنتج <span className="text-[12px] font-medium text-[#9CA3AF]">(اختياري)</span>
+                </label>
                 <input
                   value={editForm.name}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
