@@ -81,14 +81,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signOut = async () => {
-    const { error } = await supabaseClient.auth.signOut({ scope: 'local' })
-    if (error) {
-      // Ignore stale/invalid-session logout errors to keep UX smooth.
-      if (error.status !== 403) throw error
-    }
+    // Optimistic local sign-out for instant UX.
     setSession(null)
     setUser(null)
     setRole(null)
+
+    try {
+      const result = await Promise.race([
+        supabaseClient.auth.signOut({ scope: 'local' }),
+        new Promise<{ error: null }>((resolve) => setTimeout(() => resolve({ error: null }), 2000)),
+      ])
+
+      const error = result?.error
+      if (error && error.status !== 403) {
+        // Do not block UI logout for server-side token revocation issues.
+        console.warn('Supabase signOut warning:', error.message)
+      }
+    } catch (error) {
+      console.warn('Supabase signOut failed:', error)
+    }
   }
 
   const value = useMemo<AuthContextValue>(

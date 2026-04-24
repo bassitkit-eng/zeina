@@ -12,15 +12,18 @@ export function AppHeader() {
   const { user, role, signOut } = useAuth()
   const { favorites } = useFavorites()
   const [isClient, setIsClient] = useState(false)
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  const handleLogout = async () => {
-    await signOut()
-    router.push('/')
-    router.refresh()
+  const handleLogout = () => {
+    setIsLoggingOut(true)
+    setIsLogoutConfirmOpen(false)
+    router.replace('/')
+    void signOut().finally(() => setIsLoggingOut(false))
   }
 
   const isAuthenticated = Boolean(user)
@@ -61,7 +64,7 @@ export function AppHeader() {
           {isAuthenticated ? (
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => setIsLogoutConfirmOpen(true)}
               className="h-10 px-4 rounded-xl bg-[#DC2626] text-white font-bold flex items-center justify-center hover:bg-[#B91C1C] transition"
             >
               تسجيل الخروج
@@ -91,6 +94,33 @@ export function AppHeader() {
           </Link>
         </nav>
       </div>
+
+      {isLogoutConfirmOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/45 flex items-center justify-center px-4" dir="rtl">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-[#E5E7EB]">
+            <h3 className="text-xl font-bold text-[#1F1F1F] mb-2">تأكيد تسجيل الخروج</h3>
+            <p className="text-[#4B5563] mb-5">هل تريد تسجيل الخروج الآن؟</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="flex-1 h-11 rounded-lg bg-[#DC2626] text-white font-bold hover:opacity-90 transition disabled:opacity-60"
+              >
+                {isLoggingOut ? 'جارٍ الخروج...' : 'نعم'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsLogoutConfirmOpen(false)}
+                disabled={isLoggingOut}
+                className="flex-1 h-11 rounded-lg border border-[#9CA3AF] text-[#4B5563] font-bold hover:bg-[#F3F4F6] transition disabled:opacity-60"
+              >
+                لا
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   )
 }
