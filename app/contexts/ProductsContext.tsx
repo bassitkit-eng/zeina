@@ -71,6 +71,9 @@ const baseProductsByCategory: Record<CategoryId, Product[]> = {
   cakes: ALL_PRODUCTS.filter((p) => p.category === 'cakes'),
 }
 
+const DB_TIMEOUT_MS = 12000
+const DB_RETRY_DELAY_MS = 500
+
 function normalizeText(value: string | null | undefined) {
   return (value || '').trim().toLowerCase()
 }
@@ -81,6 +84,50 @@ function asError(error: unknown, fallbackMessage: string): Error {
     return new Error(String((error as { message?: string }).message || fallbackMessage))
   }
   return new Error(fallbackMessage)
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+  })
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
+  return (
+    message.includes('timeout') ||
+    message.includes('network') ||
+    message.includes('failed to fetch') ||
+    message.includes('upstream connect error') ||
+    message.includes('connection')
+  )
+}
+
+async function runDbCall<T>(operation: () => Promise<T>, fallbackMessage: string): Promise<T> {
+  const run = () => withTimeout(operation(), DB_TIMEOUT_MS, fallbackMessage)
+
+  try {
+    return await run()
+  } catch (error) {
+    if (!isRetryableError(error)) throw asError(error, fallbackMessage)
+    await delay(DB_RETRY_DELAY_MS)
+    return await run().catch((retryError) => {
+      throw asError(retryError, fallbackMessage)
+    })
+  }
 }
 
 function cityKey(governorateId: string, cityName: string) {
@@ -109,11 +156,23 @@ function matchAppCategory(category: CategoryRow): CategoryId | null {
 }
 
 async function fetchLookupMaps(): Promise<LookupMaps> {
-  const [{ data: categories }, { data: governorates }, { data: cities }] = await Promise.all([
-    supabaseClient.from('categories').select('id,name,slug').eq('is_active', true),
-    supabaseClient.from('governorates').select('id,name_ar,name_en'),
-    supabaseClient.from('cities').select('id,governorate_id,name_ar,name_en'),
-  ])
+  const [categoriesResult, governoratesResult, citiesResult] = await runDbCall(
+    () =>
+      Promise.all([
+        supabaseClient.from('categories').select('id,name,slug').eq('is_active', true),
+        supabaseClient.from('governorates').select('id,name_ar,name_en'),
+        supabaseClient.from('cities').select('id,governorate_id,name_ar,name_en'),
+      ]),
+    'تعذر تحميل التصنيفات والمواقع. تحقق من الاتصال.'
+  )
+
+  if (categoriesResult.error) throw asError(categoriesResult.error, 'تعذر قراءة التصنيفات.')
+  if (governoratesResult.error) throw asError(governoratesResult.error, 'تعذر قراءة المحافظات.')
+  if (citiesResult.error) throw asError(citiesResult.error, 'تعذر قراءة المدن.')
+
+  const categories = categoriesResult.data || []
+  const governorates = governoratesResult.data || []
+  const cities = citiesResult.data || []
 
   const dbCategoryByApp: Partial<Record<CategoryId, string>> = {}
   const appCategoryByDb = new Map<string, CategoryId>()
@@ -200,10 +259,14 @@ function mapRowsToProducts(rows: ProductRow[], images: ProductImageRow[], lookup
 async function fetchProductImages(productIds: string[]) {
   if (productIds.length === 0) return [] as ProductImageRow[]
 
-  const { data, error } = await supabaseClient
-    .from('product_images')
-    .select('product_id,image_url,storage_path,sort_order,is_primary')
-    .in('product_id', productIds)
+  const { data, error } = await runDbCall(
+    () =>
+      supabaseClient
+        .from('product_images')
+        .select('product_id,image_url,storage_path,sort_order,is_primary')
+        .in('product_id', productIds),
+    'تعذر قراءة صور المنتجات.'
+  )
 
   if (error) throw asError(error, 'تعذر قراءة صور المنتجات.')
   return (data || []) as ProductImageRow[]
@@ -215,19 +278,23 @@ async function syncVendorContact(
   governorateId: string | null,
   cityId: string | null
 ) {
-  const { error } = await supabaseClient
-    .from('vendor_profiles')
-    .update({
-      phone: input.contactInfo?.phone || null,
-      whatsapp: input.contactInfo?.whatsapp || null,
-      instagram: input.contactInfo?.instagram || null,
-      facebook: input.contactInfo?.facebook || null,
-      tiktok: input.contactInfo?.tiktok || null,
-      governorate_id: governorateId,
-      city_id: cityId,
-      address_text: input.location || null,
-    })
-    .eq('id', vendorProfileId)
+  const { error } = await runDbCall(
+    () =>
+      supabaseClient
+        .from('vendor_profiles')
+        .update({
+          phone: input.contactInfo?.phone || null,
+          whatsapp: input.contactInfo?.whatsapp || null,
+          instagram: input.contactInfo?.instagram || null,
+          facebook: input.contactInfo?.facebook || null,
+          tiktok: input.contactInfo?.tiktok || null,
+          governorate_id: governorateId,
+          city_id: cityId,
+          address_text: input.location || null,
+        })
+        .eq('id', vendorProfileId),
+    'تعذر تحديث بيانات تواصل البائع.'
+  )
 
   if (error) throw asError(error, 'تعذر تحديث بيانات التواصل الخاصة بالبائع.')
 }
@@ -241,35 +308,47 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
   const resolveCurrentUserId = async () => {
     if (userId) return userId
-    const { data, error } = await supabaseClient.auth.getUser()
+    const { data, error } = await runDbCall(() => supabaseClient.auth.getUser(), 'تعذر التحقق من المستخدم الحالي.')
     if (error) throw asError(error, 'تعذر التحقق من المستخدم الحالي.')
     return data.user?.id || null
   }
 
   const getOrCreateVendorProfileId = async (currentUserId: string) => {
-    const { data: existing, error: existingError } = await supabaseClient
-      .from('vendor_profiles')
-      .select('id')
-      .eq('user_id', currentUserId)
-      .maybeSingle()
+    const { data: existing, error: existingError } = await runDbCall(
+      () =>
+        supabaseClient
+          .from('vendor_profiles')
+          .select('id')
+          .eq('user_id', currentUserId)
+          .maybeSingle(),
+      'تعذر قراءة بروفايل البائع.'
+    )
 
     if (existingError) throw asError(existingError, 'تعذر قراءة بروفايل البائع.')
     if (existing?.id) return existing.id as string
 
-    const { data: created, error: createError } = await supabaseClient
-      .from('vendor_profiles')
-      .insert({ user_id: currentUserId, business_name: 'Zeina Vendor' })
-      .select('id')
-      .single()
+    const { data: created, error: createError } = await runDbCall(
+      () =>
+        supabaseClient
+          .from('vendor_profiles')
+          .insert({ user_id: currentUserId, business_name: 'Zeina Vendor' })
+          .select('id')
+          .single(),
+      'تعذر إنشاء بروفايل البائع.'
+    )
 
     if (createError) {
       // Handles race-condition: another request created the row first.
       if (createError.code === '23505' || createError.status === 409) {
-        const { data: afterConflict, error: afterConflictError } = await supabaseClient
-          .from('vendor_profiles')
-          .select('id')
-          .eq('user_id', currentUserId)
-          .single()
+        const { data: afterConflict, error: afterConflictError } = await runDbCall(
+          () =>
+            supabaseClient
+              .from('vendor_profiles')
+              .select('id')
+              .eq('user_id', currentUserId)
+              .single(),
+          'تعذر قراءة بروفايل البائع بعد التعارض.'
+        )
 
         if (afterConflictError) throw asError(afterConflictError, 'تعذر قراءة بروفايل البائع بعد التعارض.')
         return afterConflict.id as string
@@ -280,11 +359,15 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
   }
 
   const fetchPublished = async (lookup: LookupMaps) => {
-    const { data, error } = await supabaseClient
-      .from('products')
-      .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
-      .eq('status', 'published')
-      .order('created_at', { ascending: false })
+    const { data, error } = await runDbCall(
+      () =>
+        supabaseClient
+          .from('products')
+          .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false }),
+      'تعذر قراءة المنتجات المنشورة.'
+    )
 
     if (error) throw asError(error, 'تعذر قراءة المنتجات المنشورة.')
 
@@ -301,11 +384,15 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 
     const vendorProfileId = await getOrCreateVendorProfileId(currentUserId)
 
-    const { data, error } = await supabaseClient
-      .from('products')
-      .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
-      .eq('vendor_id', vendorProfileId)
-      .order('created_at', { ascending: false })
+    const { data, error } = await runDbCall(
+      () =>
+        supabaseClient
+          .from('products')
+          .select('id,vendor_id,category_id,title,description,price,cover_image_url,cover_storage_path,governorate_id,city_id,address_text,status')
+          .eq('vendor_id', vendorProfileId)
+          .order('created_at', { ascending: false }),
+      'تعذر قراءة منتجات البائع.'
+    )
 
     if (error) throw asError(error, 'تعذر قراءة منتجات البائع.')
 
@@ -369,32 +456,40 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     const governorateId = lookup.governorateByName.get(normalizeText(input.city)) || null
     const cityId = governorateId ? lookup.cityByGovernorateAndName.get(cityKey(governorateId, input.location)) || null : null
     const vendorProfileId = await getOrCreateVendorProfileId(currentUserId)
-    await syncVendorContact(vendorProfileId, input, governorateId, cityId)
 
     const coverImageUrl = input.imagePaths[0] || null
     const coverStoragePath = input.imageStoragePaths?.[0] || null
 
-    const { data: insertedProduct, error: insertError } = await supabaseClient
-      .from('products')
-      .insert({
-        vendor_id: vendorProfileId,
-        category_id: categoryDbId,
-        title: input.name,
-        description: input.description || null,
-        price: input.price,
-        cover_image_url: coverImageUrl,
-        cover_storage_path: coverStoragePath,
-        governorate_id: governorateId,
-        city_id: cityId,
-        address_text: input.location || null,
-        status: input.status,
-      })
-      .select('id')
-      .single()
+    const { data: insertedProduct, error: insertError } = await runDbCall(
+      () =>
+        supabaseClient
+          .from('products')
+          .insert({
+            vendor_id: vendorProfileId,
+            category_id: categoryDbId,
+            title: input.name,
+            description: input.description || null,
+            price: input.price,
+            cover_image_url: coverImageUrl,
+            cover_storage_path: coverStoragePath,
+            governorate_id: governorateId,
+            city_id: cityId,
+            address_text: input.location || null,
+            status: input.status,
+          })
+          .select('id')
+          .single(),
+      'تعذر حفظ بيانات المنتج في قاعدة البيانات.'
+    )
 
     if (insertError) throw asError(insertError, 'تعذر حفظ بيانات المنتج في قاعدة البيانات.')
 
     const productId = insertedProduct.id as string
+
+    // Keep publish fast; contact sync runs in background and won't block publish.
+    void syncVendorContact(vendorProfileId, input, governorateId, cityId).catch((error) => {
+      console.warn('Vendor contact sync failed:', error)
+    })
 
     const imagesPayload = input.imagePaths.map((imageUrl, index) => ({
       product_id: productId,
@@ -405,7 +500,10 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
     }))
 
     if (imagesPayload.length > 0) {
-      const { error: imagesError } = await supabaseClient.from('product_images').insert(imagesPayload)
+      const { error: imagesError } = await runDbCall(
+        () => supabaseClient.from('product_images').insert(imagesPayload),
+        'تعذر حفظ صور المنتج في قاعدة البيانات.'
+      )
       if (imagesError) throw asError(imagesError, 'تعذر حفظ صور المنتج في قاعدة البيانات.')
     }
 

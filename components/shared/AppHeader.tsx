@@ -55,6 +55,12 @@ export function AppHeader() {
             <span>أضف منتجك</span>
           </Link>
 
+          {isAuthenticated && (
+            <Link href="/account-task" className="text-[#1F1F1F] hover:text-[#DC2626] transition font-semibold">
+              مهمة الحساب
+            </Link>
+          )}
+
           {isVendor && (
             <Link href="/vendor-dashboard" className="text-[#1F1F1F] hover:text-[#7B57C8] transition font-semibold">
               لوحة البائع

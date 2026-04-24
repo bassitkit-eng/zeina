@@ -51,6 +51,7 @@ const initialForm: ProductFormState = {
 }
 
 const STEPS = ['بيانات أساسية', 'التصنيف والموقع', 'معلومات التواصل', 'الصور', 'المراجعة والنشر']
+const PUBLISH_TIMEOUT_MS = 30000
 
 function normalizeArabicDigits(value: string) {
   return value
@@ -58,6 +59,21 @@ function normalizeArabicDigits(value: string) {
     .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
     .replace(/٬/g, '')
     .replace(/،/g, '.')
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+  })
 }
 
 export default function AddProductPage() {
@@ -280,10 +296,15 @@ export default function AddProductPage() {
     void buildProductImagesPayload(draftUploadProductId, uploadedImagesForInsert)
 
     try {
-      await addProduct(payload)
+      await withTimeout(
+        addProduct(payload),
+        PUBLISH_TIMEOUT_MS,
+        'تأخر الاتصال أثناء النشر. تحقق من الإنترنت ثم أعد المحاولة، أو راجع "منتجاتي" فقد يكون المنتج نُشر بالفعل.'
+      )
       resetForm()
       setActiveTab('mine')
     } catch (submitError) {
+      console.error('submitWithStatus failed', submitError)
       setError(submitError instanceof Error ? submitError.message : 'تعذر حفظ المنتج الآن.')
     } finally {
       setIsSubmitting(false)
